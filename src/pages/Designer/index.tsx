@@ -33,6 +33,7 @@ const DesignerPage: React.FC = () => {
     <div
       style={{
         display: "flex",
+        flexWrap: "wrap", 
         gap: 16,
         minHeight: "60vh",
       }}
@@ -65,7 +66,14 @@ const DesignerPage: React.FC = () => {
       </div>
 
       {/* 右侧：流程画布区域 */}
-      <div style={{ flex: 1, display: "flex" }}>
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          minWidth: 500, 
+          flexWrap: "wrap"
+        }}
+      >
         <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
           <div style={{ marginBottom: 8 }}>
             <Title level={4} style={{ margin: 0 }}>
@@ -138,7 +146,14 @@ const DesignerPage: React.FC = () => {
             ))}
           </div>
         </div>
-        <div style={{ width: 260, marginLeft: 16 }}>
+        <div
+          style={{
+            width: 260,
+            flexShrink: 0,
+            marginLeft: 16,
+            minWidth: 240
+          }}
+        >
           <PropertiesPanel />
         </div>
       </div>
