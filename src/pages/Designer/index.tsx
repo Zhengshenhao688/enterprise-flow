@@ -2,6 +2,7 @@ import React from "react";
 import { Card, Typography, Space } from "antd";
 import { useFlowStore } from "../../store/flowStore";
 import PropertiesPanel from "./components/PropertiesPanel";
+import NodeItem from "./components/NodeItem";
 
 const { Title, Text } = Typography;
 
@@ -26,19 +27,19 @@ const NODE_TYPES = [
 const DesignerPage: React.FC = () => {
   const nodes = useFlowStore((s) => s.nodes);
   const addNode = useFlowStore((s) => s.addNode);
-  const selectedNodeId = useFlowStore((s) => s.selectedNodeId);
-  const setSelectedNode = useFlowStore((s) => s.setSelectedNode);
+
+  const setSelectedNodeId = useFlowStore((s) => s.setSelectedNodeId);
 
   return (
     <div
       style={{
         display: "flex",
-        flexWrap: "wrap", 
+        flexWrap: "wrap",
         gap: 16,
         minHeight: "60vh",
       }}
     >
-      {/* 左侧：节点面板 */}
+      {/* 左侧节点面板 */}
       <div style={{ width: 240 }}>
         <Card title="节点面板" bordered={false} style={{ height: "100%" }}>
           <Space direction="vertical" style={{ width: "100%" }} size="middle">
@@ -65,13 +66,13 @@ const DesignerPage: React.FC = () => {
         </Card>
       </div>
 
-      {/* 右侧：流程画布区域 */}
+      {/* 右侧画布 */}
       <div
         style={{
           flex: 1,
           display: "flex",
-          minWidth: 500, 
-          flexWrap: "wrap"
+          minWidth: 500,
+          flexWrap: "wrap",
         }}
       >
         <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
@@ -106,7 +107,7 @@ const DesignerPage: React.FC = () => {
                 position: { x, y },
               });
             }}
-            onClick={() => setSelectedNode(null)}
+            onClick={() => setSelectedNodeId(null)}
             style={{
               flex: 1,
               borderRadius: 8,
@@ -117,41 +118,20 @@ const DesignerPage: React.FC = () => {
               minHeight: 400,
             }}
           >
-            {/* 渲染画布里的节点 */}
+            {/* 渲染画布节点 */}
             {nodes.map((node) => (
-              <div
-                key={node.id}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedNode(node.id);
-                }}
-                style={{
-                  position: "absolute",
-                  top: node.position.y,
-                  left: node.position.x,
-                  padding: "6px 12px",
-                  borderRadius: 6,
-                  background: "#fff",
-                  boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
-                  border:
-                    selectedNodeId === node.id
-                      ? "2px solid #1677ff"
-                      : "1px solid #d9d9d9",
-                  transform: "translate(-50%, -50%)",
-                  fontSize: 14,
-                }}
-              >
-                {node.name}
-              </div>
+              <NodeItem key={node.id} node={node} />
             ))}
           </div>
         </div>
+
+        {/* 属性面板 */}
         <div
           style={{
             width: 260,
             flexShrink: 0,
             marginLeft: 16,
-            minWidth: 240
+            minWidth: 240,
           }}
         >
           <PropertiesPanel />
