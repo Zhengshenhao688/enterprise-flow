@@ -6,6 +6,12 @@ import { nanoid } from "nanoid";
 // =======================================================
 
 export type AnchorType = "top" | "right" | "bottom" | "left";
+export const anchorOffsets: Record<AnchorType, { x: number; y: number }> = {
+  top: { x: 50, y: 0 },
+  right: { x: 100, y: 50 },
+  bottom: { x: 50, y: 100 },
+  left: { x: 0, y: 50 },
+};
 
 export type FlowNode = {
   id: string;
@@ -77,15 +83,19 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
   // ========================
   connectionDraft: null,
 
-  startConnect: (nodeId, anchor) =>
+  startConnect: (nodeId, anchor) => {
+    const node = get().nodes.find((n) => n.id === nodeId);
+    const offset = anchorOffsets[anchor];
+
     set({
       connectionDraft: {
         fromNodeId: nodeId,
         fromAnchor: anchor,
-        mouseX: 0,
-        mouseY: 0,
+        mouseX: node ? node.position.x + offset.x : 0,
+        mouseY: node ? node.position.y + offset.y : 0,
       },
-    }),
+    });
+  },
 
   updateDraft: (mouseX, mouseY) => {
     const draft = get().connectionDraft;

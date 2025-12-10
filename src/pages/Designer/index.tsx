@@ -3,6 +3,7 @@ import { Card, Typography, Space } from "antd";
 import { useFlowStore } from "../../store/flowStore";
 import PropertiesPanel from "./components/PropertiesPanel";
 import NodeItem from "./components/NodeItem";
+import EdgesLayer from "./components/EdgesLayer";
 
 const { Title, Text } = Typography;
 
@@ -27,7 +28,8 @@ const NODE_TYPES = [
 const DesignerPage: React.FC = () => {
   const nodes = useFlowStore((s) => s.nodes);
   const addNode = useFlowStore((s) => s.addNode);
-
+  const updateDraft = useFlowStore((s) => s.updateDraft);
+  const endConnect = useFlowStore((s) => s.endConnect);
   const setSelectedNodeId = useFlowStore((s) => s.setSelectedNodeId);
 
   return (
@@ -107,7 +109,12 @@ const DesignerPage: React.FC = () => {
                 position: { x, y },
               });
             }}
+            onMouseMove={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              updateDraft(e.clientX - rect.left, e.clientY - rect.top);
+            }}
             onClick={() => setSelectedNodeId(null)}
+            onMouseUp={() => endConnect(null, null)}
             style={{
               flex: 1,
               borderRadius: 8,
@@ -118,6 +125,7 @@ const DesignerPage: React.FC = () => {
               minHeight: 400,
             }}
           >
+            <EdgesLayer />
             {/* 渲染画布节点 */}
             {nodes.map((node) => (
               <NodeItem key={node.id} node={node} />

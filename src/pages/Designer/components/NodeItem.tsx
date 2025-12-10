@@ -1,18 +1,21 @@
-import { useFlowStore } from "../../../store/flowStore";
+import { anchorOffsets, useFlowStore } from "../../../store/flowStore";
 import type { AnchorType, FlowNode } from "../../../store/flowStore";
-
-const anchorPositions: Record<AnchorType, { x: number; y: number }> = {
-  top: { x: 50, y: 0 },
-  right: { x: 100, y: 50 },
-  bottom: { x: 50, y: 100 },
-  left: { x: 0, y: 50 },
-};
 
 export default function NodeItem({ node }: { node: FlowNode }) {
   const startConnect = useFlowStore((s) => s.startConnect);
+  const endConnect = useFlowStore((s) => s.endConnect);
+  const connectionDraft = useFlowStore((s) => s.connectionDraft);
+  const selectedNodeId = useFlowStore((s) => s.selectedNodeId);
+  const setSelectedNodeId = useFlowStore((s) => s.setSelectedNodeId);
+
+  const isSelected = selectedNodeId === node.id;
 
   return (
     <div
+      onClick={(e) => {
+        e.stopPropagation();
+        setSelectedNodeId(node.id);
+      }}
       style={{
         position: "absolute",
         left: node.position.x,
@@ -20,23 +23,35 @@ export default function NodeItem({ node }: { node: FlowNode }) {
         width: 100,
         height: 100,
         background: "#fff",
-        border: "2px solid #1677ff",
+        border: isSelected ? "2px solid #1677ff" : "1px solid #d9d9d9",
         borderRadius: 8,
+        boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
         userSelect: "none",
       }}
     >
       {/* 节点文字 */}
-      <div style={{ textAlign: "center", marginTop: 35 }}>{node.name}</div>
+      <div style={{ textAlign: "center", marginTop: 35, fontSize: 14 }}>
+        {node.name}
+      </div>
 
       {/* 四个锚点 */}
       {(["top", "right", "bottom", "left"] as AnchorType[]).map((anchor) => {
-        const pos = anchorPositions[anchor];
+        const pos = anchorOffsets[anchor];
+
         return (
           <div
             key={anchor}
             onMouseDown={(e) => {
               e.stopPropagation();
+              // 从当前锚点开始连线
               startConnect(node.id, anchor);
+            }}
+            onMouseUp={(e) => {
+              e.stopPropagation();
+              // 如果当前存在起点，则将当前锚点作为终点，完成连线
+              if (connectionDraft) {
+                endConnect(node.id, anchor);
+              }
             }}
             style={{
               position: "absolute",
