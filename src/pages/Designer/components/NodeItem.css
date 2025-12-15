@@ -1,0 +1,104 @@
+
+
+/* =========================
+   Node 基础样式
+========================= */
+
+.ef-node {
+  position: absolute;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  user-select: none;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: max-content;
+}
+
+/* =========================
+   选中态：蓝色描边
+========================= */
+
+.ef-node.is-selected {
+  outline: 2px solid #1677ff; /* Ant Design 蓝 */
+  outline-offset: 2px;
+}
+
+/* =========================
+   节点内容
+========================= */
+
+.ef-node__content {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f1f1f;
+  white-space: nowrap;
+}
+
+/* =========================
+   锚点通用样式
+========================= */
+
+.ef-anchor {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #1677ff;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  z-index: 2;
+}
+
+/* =========================
+   四个方向锚点定位
+========================= */
+
+.ef-anchor.top {
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -50%);
+}
+
+.ef-anchor.right {
+  right: 0;
+  top: 50%;
+  transform: translate(50%, -50%);
+}
+
+.ef-anchor.bottom {
+  left: 50%;
+  bottom: 0;
+  transform: translate(-50%, 50%);
+}
+
+.ef-anchor.left {
+  left: 0;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* =========================
+   锚点 hover（预留）
+========================= */
+
+
+.ef-anchor.top:hover {
+  transform: translate(-50%, -50%) scale(1.2);
+}
+
+.ef-anchor.right:hover {
+  transform: translate(50%, -50%) scale(1.2);
+}
+
+.ef-anchor.bottom:hover {
+  transform: translate(-50%, 50%) scale(1.2);
+}
+
+.ef-anchor.left:hover {
+  transform: translate(-50%, -50%) scale(1.2);
+}

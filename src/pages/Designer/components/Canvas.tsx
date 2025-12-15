@@ -1,14 +1,14 @@
 import React from "react";
 import { Typography } from "antd";
 import { useFlowStore } from "../../../store/flowStore";
+import NodeItem from "./NodeItem";
 
 const { Title, Text } = Typography;
 
 const Canvas: React.FC = () => {
   const nodes = useFlowStore((s) => s.nodes);
   const addNode = useFlowStore((s) => s.addNode);
-  const selectedNodeId = useFlowStore((s) => s.selectedNodeId);
-  const setSelectedNode = useFlowStore((s) => s.setSelectedNode);
+  const setSelectedNodeId = useFlowStore((s) => s.setSelectedNodeId);
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
@@ -45,7 +45,7 @@ const Canvas: React.FC = () => {
             position: { x, y },
           });
         }}
-        onClick={() => setSelectedNode(null)}
+        onMouseDown={() => setSelectedNodeId(null)}
         style={{
           flex: 1,
           borderRadius: 8,
@@ -56,32 +56,8 @@ const Canvas: React.FC = () => {
           minHeight: 400,
         }}
       >
-        {/* 节点渲染 */}
         {nodes.map((node) => (
-          <div
-            key={node.id}
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedNode(node.id);
-            }}
-            style={{
-              position: "absolute",
-              top: node.position.y,
-              left: node.position.x,
-              padding: "6px 12px",
-              borderRadius: 6,
-              background: "#fff",
-              boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
-              border:
-                selectedNodeId === node.id
-                  ? "2px solid #1677ff"
-                  : "1px solid #d9d9d9",
-              transform: "translate(-50%, -50%)",
-              fontSize: 14,
-            }}
-          >
-            {node.name}
-          </div>
+          <NodeItem key={node.id} node={node} />
         ))}
       </div>
     </div>
