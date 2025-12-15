@@ -24,8 +24,8 @@ const NODE_TYPES = [
 const NodePanel: React.FC = () => {
   return (
     <div style={{ width: 240 }}>
-      <Card title="节点面板" bordered={false} style={{ height: "100%" }}>
-        <Space direction="vertical" style={{ width: "100%" }} size="middle">
+      <Card title="节点面板" variant="borderless" style={{ height: "100%" }}>
+        <Space orientation="vertical" style={{ width: "100%" }} size="middle">
           {NODE_TYPES.map((node) => (
             <Card
               key={node.type}
