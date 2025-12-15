@@ -26,14 +26,6 @@ export type FlowEdge = {
   to: { nodeId: string; anchor: AnchorType };
 };
 
-// 临时连线草稿
-export type ConnectionDraft = {
-  fromNodeId: string;
-  fromAnchor: AnchorType;
-  mouseX: number;
-  mouseY: number;
-} | null;
-
 // =======================================================
 // Zustand Store 定义
 // =======================================================
@@ -50,11 +42,12 @@ type FlowStore = {
   addNode: (node: FlowNode) => void;
   updateNode: (id: string, data: Partial<FlowNode>) => void;
 
-  // 连线系统
-  connectionDraft: ConnectionDraft;
+  updateNodePosition: (id: string, position: { x: number; y: number }) => void;
+
+  connectState: { mode: "idle" } | { mode: "connecting"; fromNodeId: string; fromAnchor: AnchorType };
   startConnect: (nodeId: string, anchor: AnchorType) => void;
-  updateDraft: (mouseX: number, mouseY: number) => void;
-  endConnect: (toNodeId: string | null, anchor: AnchorType | null) => void;
+  finishConnect: (toNodeId: string, anchor: AnchorType) => void;
+  cancelConnect: () => void;
 };
 
 // =======================================================
@@ -78,54 +71,28 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
       nodes: state.nodes.map((n) => (n.id === id ? { ...n, ...data } : n)),
     })),
 
-  // ========================
-  // 连线逻辑
-  // ========================
-  connectionDraft: null,
+  updateNodePosition: (id, position) =>
+    set((state) => ({
+      nodes: state.nodes.map((n) =>
+        n.id === id ? { ...n, position } : n
+      ),
+    })),
+
+  connectState: { mode: "idle" },
 
   startConnect: (nodeId, anchor) => {
-    const node = get().nodes.find((n) => n.id === nodeId);
-    const offset = anchorOffsets[anchor];
-
-    set({
-      connectionDraft: {
-        fromNodeId: nodeId,
-        fromAnchor: anchor,
-        mouseX: node ? node.position.x + offset.x : 0,
-        mouseY: node ? node.position.y + offset.y : 0,
-      },
-    });
+    set({ connectState: { mode: "connecting", fromNodeId: nodeId, fromAnchor: anchor } });
   },
 
-  updateDraft: (mouseX, mouseY) => {
-    const draft = get().connectionDraft;
-    if (!draft) return;
+  finishConnect: (toNodeId, anchor) => {
+    const connectState = get().connectState;
+    if (connectState.mode !== "connecting") return;
 
-    set({
-      connectionDraft: {
-        ...draft,
-        mouseX,
-        mouseY,
-      },
-    });
-  },
-
-  endConnect: (toNodeId, anchor) => {
-    const draft = get().connectionDraft;
-    if (!draft) return;
-
-    // 无效就取消
-    if (!toNodeId || !anchor) {
-      set({ connectionDraft: null });
-      return;
-    }
-
-    // 创建新连线
     const newEdge: FlowEdge = {
       id: nanoid(),
       from: {
-        nodeId: draft.fromNodeId,
-        anchor: draft.fromAnchor,
+        nodeId: connectState.fromNodeId,
+        anchor: connectState.fromAnchor,
       },
       to: {
         nodeId: toNodeId,
@@ -135,7 +102,11 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
 
     set((state) => ({
       edges: [...state.edges, newEdge],
-      connectionDraft: null,
+      connectState: { mode: "idle" },
     }));
+  },
+
+  cancelConnect: () => {
+    set({ connectState: { mode: "idle" } });
   },
 }));

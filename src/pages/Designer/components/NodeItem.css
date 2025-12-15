@@ -6,6 +6,7 @@
 
 .ef-node {
   position: absolute;
+  overflow: visible;
   padding: 12px 16px;
   border-radius: 10px;
   background: #ffffff;
@@ -60,24 +61,24 @@
 
 .ef-anchor.top {
   left: 50%;
-  top: 0;
+  top: -6px;
   transform: translate(-50%, -50%);
 }
 
 .ef-anchor.right {
-  right: 0;
+  right: -6px;
   top: 50%;
   transform: translate(50%, -50%);
 }
 
 .ef-anchor.bottom {
   left: 50%;
-  bottom: 0;
+  bottom: -6px;
   transform: translate(-50%, 50%);
 }
 
 .ef-anchor.left {
-  left: 0;
+  left: -6px;
   top: 50%;
   transform: translate(-50%, -50%);
 }

@@ -12,6 +12,7 @@ const anchors: AnchorType[] = ["top", "right", "bottom", "left"];
 const NodeItem: React.FC<NodeItemProps> = ({ node }) => {
   const selectedNodeId = useFlowStore((s) => s.selectedNodeId);
   const setSelectedNodeId = useFlowStore((s) => s.setSelectedNodeId);
+  const updateNodePosition = useFlowStore((s) => s.updateNodePosition);
 
   const isSelected = selectedNodeId === node.id;
 
@@ -26,6 +27,28 @@ const NodeItem: React.FC<NodeItemProps> = ({ node }) => {
       onMouseDown={(e) => {
         e.stopPropagation();
         setSelectedNodeId(node.id);
+
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const startPos = { ...node.position };
+
+        const onMouseMove = (moveEvent: MouseEvent) => {
+          const dx = moveEvent.clientX - startX;
+          const dy = moveEvent.clientY - startY;
+
+          updateNodePosition(node.id, {
+            x: startPos.x + dx,
+            y: startPos.y + dy,
+          });
+        };
+
+        const onMouseUp = () => {
+          window.removeEventListener("mousemove", onMouseMove);
+          window.removeEventListener("mouseup", onMouseUp);
+        };
+
+        window.addEventListener("mousemove", onMouseMove);
+        window.addEventListener("mouseup", onMouseUp);
       }}
     >
       {/* 节点主体 */}
