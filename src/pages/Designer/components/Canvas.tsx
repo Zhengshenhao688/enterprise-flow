@@ -1,3 +1,4 @@
+//Canvas.tsx
 import React, { useEffect, useRef, useState } from "react";
 import { Typography } from "antd";
 import { useFlowStore } from "../../../store/flowStore";
@@ -31,7 +32,6 @@ const Canvas: React.FC = () => {
   // ================== 画布尺寸同步 ==================
   useEffect(() => {
     if (!canvasRef.current) return;
-
     const el = canvasRef.current;
 
     const updateSize = () => {
@@ -42,7 +42,6 @@ const Canvas: React.FC = () => {
     updateSize();
     const ro = new ResizeObserver(updateSize);
     ro.observe(el);
-
     return () => ro.disconnect();
   }, [setCanvasSize]);
 
@@ -55,17 +54,14 @@ const Canvas: React.FC = () => {
         e.preventDefault();
       }
     };
-
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === "Space") {
         isSpaceDownRef.current = false;
         setIsSpaceDown(false);
       }
     };
-
     window.addEventListener("keydown", onKeyDown, { passive: false });
     window.addEventListener("keyup", onKeyUp);
-
     return () => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
@@ -76,26 +72,18 @@ const Canvas: React.FC = () => {
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
       if (!isPanningRef.current) return;
-
       setViewportOffset({
-        x:
-          panStartOffsetRef.current.x +
-          (e.clientX - panStartMouseRef.current.x),
-        y:
-          panStartOffsetRef.current.y +
-          (e.clientY - panStartMouseRef.current.y),
+        x: panStartOffsetRef.current.x + (e.clientX - panStartMouseRef.current.x),
+        y: panStartOffsetRef.current.y + (e.clientY - panStartMouseRef.current.y),
       });
     };
-
     const onMouseUp = () => {
       isPanningRef.current = false;
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     };
-
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
-
     return () => {
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
@@ -137,6 +125,7 @@ const Canvas: React.FC = () => {
           if (!type) return;
 
           const rect = e.currentTarget.getBoundingClientRect();
+          // 注意：放入节点时，需要减去当前的 viewportOffset，转换为世界坐标
           const x = e.clientX - rect.left - viewportOffset.x;
           const y = e.clientY - rect.top - viewportOffset.y;
 
@@ -159,21 +148,27 @@ const Canvas: React.FC = () => {
           cursor: isSpaceDown ? "grab" : "default",
         }}
       >
-        {/* ===== 线层：屏幕坐标（不跟随 transform） ===== */}
-        <EdgesLayer />
-
-        {/* ===== 世界层：节点才跟随 Pan ===== */}
+        {/* ===== 世界容器：所有内容都受 Pan 影响 ===== */}
         <div
           style={{
             position: "absolute",
             inset: 0,
+            width: "100%",
+            height: "100%",
             transform: `translate(${viewportOffset.x}px, ${viewportOffset.y}px)`,
             transformOrigin: "0 0",
+            pointerEvents: "none", // 容器本身不阻挡鼠标
           }}
         >
-          {nodes.map((node) => (
-            <NodeItem key={node.id} node={node} />
-          ))}
+          {/* 1. 线层：现在位于世界坐标系中 */}
+          <EdgesLayer />
+
+          {/* 2. 节点层：需要开启 pointerEvents */}
+          <div style={{ pointerEvents: "auto", width: "100%", height: "100%" }}>
+            {nodes.map((node) => (
+              <NodeItem key={node.id} node={node} />
+            ))}
+          </div>
         </div>
       </div>
     </div>

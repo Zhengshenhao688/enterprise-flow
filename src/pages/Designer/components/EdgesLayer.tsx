@@ -1,61 +1,19 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useFlowStore } from "../../../store/flowStore";
+//EdgeLayer.tsx
 
-/**
- * EdgesLayer
- * - 使用真实锚点 DOM 坐标（screen）
- * - 转换为 canvas 本地坐标
- */
+import React, { useMemo } from "react";
+import { useFlowStore, getAnchorCoordinate, type FlowNode } from "../../../store/flowStore";
+
 const EdgesLayer: React.FC = () => {
   const edges = useFlowStore((s) => s.edges);
-  const anchorPositions = useFlowStore((s) => s.anchorPositions);
   const nodes = useFlowStore((s) => s.nodes);
 
-  // 用 state 存 Canvas rect
-  const [canvasRect, setCanvasRect] = useState<DOMRect | null>(null);
-
-  // nodeId -> node.position 映射（这里只是完整性保留，不参与几何）
+  // 1. 建立 id -> Node 的查找表，便于 O(1) 获取节点位置
   const nodeMap = useMemo(() => {
-    const map = new Map<string, { x: number; y: number }>();
-    nodes.forEach((n) => {
-      map.set(n.id, { x: n.position.x, y: n.position.y });
-    });
-    return map;
+    return nodes.reduce((acc, node) => {
+      acc[node.id] = node;
+      return acc;
+    }, {} as Record<string, FlowNode>);
   }, [nodes]);
-
-  // 获取 Canvas rect
-  useEffect(() => {
-    const el = document.querySelector(
-      "[data-canvas-root]"
-    ) as HTMLDivElement | null;
-
-    if (!el) return;
-
-    let raf = 0;
-
-    const update = () => {
-      raf = requestAnimationFrame(() => {
-        setCanvasRect(el.getBoundingClientRect());
-      });
-    };
-
-    update();
-
-    window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, true);
-
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update, true);
-      ro.disconnect();
-    };
-  }, []);
-
-  if (!canvasRect) return null;
 
   return (
     <svg
@@ -66,33 +24,27 @@ const EdgesLayer: React.FC = () => {
         left: 0,
         top: 0,
         pointerEvents: "none",
-        overflow: "visible",
+        overflow: "visible", // 允许线条画在 SVG 视口外（如果父容器允许）
       }}
     >
       {edges.map((edge) => {
-        const fromKey = `${edge.from.nodeId}:${edge.from.anchor}`;
-        const toKey = `${edge.to.nodeId}:${edge.to.anchor}`;
+        const fromNode = nodeMap[edge.from.nodeId];
+        const toNode = nodeMap[edge.to.nodeId];
 
-        const fromPos = anchorPositions[fromKey];
-        const toPos = anchorPositions[toKey];
-        const fromNode = nodeMap.get(edge.from.nodeId);
-        const toNode = nodeMap.get(edge.to.nodeId);
+        // 只有当两个节点都存在时才渲染
+        if (!fromNode || !toNode) return null;
 
-        if (!fromPos || !toPos || !fromNode || !toNode) return null;
-
-        // ⭐ 核心修复：同步减去 viewportOffset
-        const x1 = fromPos.x - canvasRect.left;
-        const y1 = fromPos.y - canvasRect.top;
-        const x2 = toPos.x - canvasRect.left;
-        const y2 = toPos.y - canvasRect.top;
+        // 2. ⭐ 直接计算世界坐标，无需 DOM 测量
+        const start = getAnchorCoordinate(fromNode.position, edge.from.anchor);
+        const end = getAnchorCoordinate(toNode.position, edge.to.anchor);
 
         return (
           <line
             key={edge.id}
-            x1={x1}
-            y1={y1}
-            x2={x2}
-            y2={y2}
+            x1={start.x}
+            y1={start.y}
+            x2={end.x}
+            y2={end.y}
             stroke="#1677ff"
             strokeWidth={2}
           />

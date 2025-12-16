@@ -1,4 +1,5 @@
-import React, { useLayoutEffect, useRef } from "react";
+// NodeItem.tsx
+import React from "react";
 import { useFlowStore } from "../../../store/flowStore";
 import type { FlowNode, AnchorType } from "../../../store/flowStore";
 import "./nodeItem.css";
@@ -19,39 +20,13 @@ const NodeItem: React.FC<NodeItemProps> = ({ node }) => {
   const startConnect = useFlowStore((s) => s.startConnect);
   const finishConnect = useFlowStore((s) => s.finishConnect);
 
-  // ⭐ 真实锚点坐标上报
-  const setAnchorPosition = useFlowStore((s) => s.setAnchorPosition);
-  
-
   const isSelected = selectedNodeId === node.id;
   const isConnecting =
     connectState.mode === "connecting" && connectState.fromNodeId === node.id;
 
-  // 连线中：所有节点显示锚点
+  // 连线中：显示所有锚点以便连接
   // 非连线中：仅选中节点显示锚点
   const shouldShowAnchors = isSelected || connectState.mode === "connecting";
-
-  // ===== 锚点 refs（DOM 真实位置来源）=====
-  const anchorRefs = useRef<Record<AnchorType, HTMLSpanElement | null>>({
-    top: null,
-    right: null,
-    bottom: null,
-    left: null,
-  });
-
-  // ===== 上报真实锚点中心坐标 =====
-  useLayoutEffect(() => {
-    Object.entries(anchorRefs.current).forEach(([anchor, el]) => {
-      if (!el) return;
-
-      const rect = el.getBoundingClientRect();
-
-      setAnchorPosition(node.id, anchor as AnchorType, {
-        x: rect.left + rect.width / 2,
-        y: rect.top + rect.height / 2,
-      });
-    });
-  });
 
   return (
     <div
@@ -65,10 +40,11 @@ const NodeItem: React.FC<NodeItemProps> = ({ node }) => {
       }}
       onMouseDown={(e) => {
         e.stopPropagation();
-        setSelectedNodeId(node.id);
 
-        // 连线中禁止拖拽节点
+        // 连线模式下，点击节点不应打断连线，也不应触发拖拽
         if (connectState.mode === "connecting") return;
+
+        setSelectedNodeId(node.id);
 
         const startX = e.clientX;
         const startY = e.clientY;
@@ -101,10 +77,7 @@ const NodeItem: React.FC<NodeItemProps> = ({ node }) => {
         anchors.map((anchor) => (
           <span
             key={anchor}
-            ref={(el) => {
-              anchorRefs.current[anchor] = el;
-            }}
-            className={`ef-anchor ${anchor}  ${
+            className={`ef-anchor ${anchor} ${
               shouldShowAnchors ? "visible" : "hidden"
             }`}
             data-anchor={anchor}

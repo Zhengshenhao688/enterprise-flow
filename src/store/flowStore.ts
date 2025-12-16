@@ -1,20 +1,34 @@
+// flowStore.ts
 import { create } from "zustand";
 import { nanoid } from "nanoid";
 
 // =======================================================
-// 工具函数
+// 工具函数 & 常量
 // =======================================================
+
+export const NODE_WIDTH = 100;
+export const NODE_HEIGHT = 50;
 
 export function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(value, max));
 }
 
-// =======================================================
-// 节点尺寸（用于边界限制）
-// =======================================================
-
-const NODE_WIDTH = 100;
-const NODE_HEIGHT = 50;
+// ⭐ 新增：纯逻辑计算锚点坐标（不再依赖 DOM）
+export function getAnchorCoordinate(position: { x: number; y: number }, anchor: AnchorType) {
+  const { x, y } = position;
+  switch (anchor) {
+    case "top":
+      return { x: x + NODE_WIDTH / 2, y: y };
+    case "right":
+      return { x: x + NODE_WIDTH, y: y + NODE_HEIGHT / 2 };
+    case "bottom":
+      return { x: x + NODE_WIDTH / 2, y: y + NODE_HEIGHT };
+    case "left":
+      return { x: x, y: y + NODE_HEIGHT / 2 };
+    default:
+      return { x, y };
+  }
+}
 
 // =======================================================
 // 类型定义
@@ -46,16 +60,7 @@ export type ConnectState =
   | { mode: "idle" }
   | { mode: "connecting"; fromNodeId: string; fromAnchor: AnchorType };
 
-// ================== 锚点真实坐标 ==================
-
-export type AnchorPosition = {
-  x: number;
-  y: number;
-};
-
-// =======================================================
-// Zustand Store 定义
-// =======================================================
+// ================== Zustand Store 定义 ==================
 
 type FlowStore = {
   // ---------- 节点 & 边 ----------
@@ -85,14 +90,6 @@ type FlowStore = {
   startConnect: (nodeId: string, anchor: AnchorType) => void;
   finishConnect: (toNodeId: string, anchor: AnchorType) => void;
   cancelConnect: () => void;
-
-  // ---------- ⭐ 真实锚点坐标 ----------
-  anchorPositions: Record<string, AnchorPosition>;
-  setAnchorPosition: (
-    nodeId: string,
-    anchor: AnchorType,
-    position: AnchorPosition
-  ) => void;
 };
 
 // =======================================================
@@ -205,15 +202,4 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
   cancelConnect: () => {
     set({ connectState: { mode: "idle" } });
   },
-
-  // ================= ⭐ 真实锚点坐标 =================
-  anchorPositions: {},
-
-  setAnchorPosition: (nodeId, anchor, position) =>
-    set((state) => ({
-      anchorPositions: {
-        ...state.anchorPositions,
-        [`${nodeId}:${anchor}`]: position,
-      },
-    })),
 }));
