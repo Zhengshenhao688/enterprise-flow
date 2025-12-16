@@ -5,20 +5,14 @@ import { nanoid } from "nanoid";
 // 工具函数
 // =======================================================
 
-/**
- * 将数值限制在指定区间内
- * @param value 当前值
- * @param min 最小值
- * @param max 最大值
- */
 export function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(value, max));
 }
 
 // =======================================================
 // 节点尺寸（用于边界限制）
-// 注意：这里是“节点盒子”占用尺寸（不含阴影），可按你的 NodeItem 实际样式调整
 // =======================================================
+
 const NODE_WIDTH = 100;
 const NODE_HEIGHT = 50;
 
@@ -27,11 +21,10 @@ const NODE_HEIGHT = 50;
 // =======================================================
 
 export type AnchorType = "top" | "right" | "bottom" | "left";
-export const anchorOffsets: Record<AnchorType, { x: number; y: number }> = {
-  top: { x: 50, y: 0 },
-  right: { x: 100, y: 50 },
-  bottom: { x: 50, y: 100 },
-  left: { x: 0, y: 50 },
+
+export type Point = {
+  x: number;
+  y: number;
 };
 
 export type FlowNode = {
@@ -47,42 +40,71 @@ export type FlowEdge = {
   to: { nodeId: string; anchor: AnchorType };
 };
 
+// ================== 连线状态 ==================
+
+export type ConnectState =
+  | { mode: "idle" }
+  | { mode: "connecting"; fromNodeId: string; fromAnchor: AnchorType };
+
+// ================== 锚点真实坐标 ==================
+
+export type AnchorPosition = {
+  x: number;
+  y: number;
+};
+
 // =======================================================
 // Zustand Store 定义
 // =======================================================
 
 type FlowStore = {
+  // ---------- 节点 & 边 ----------
   nodes: FlowNode[];
   edges: FlowEdge[];
 
+  // ---------- 画布 / 世界 ----------
   canvasSize: { width: number; height: number };
   worldSize: { width: number; height: number };
   setCanvasSize: (size: { width: number; height: number }) => void;
 
-  // 节点选中
+  // ---------- ⭐ 视口（Pan） ----------
+  viewportOffset: Point;
+  setViewportOffset: (offset: Point) => void;
+
+  // ---------- 选中 ----------
   selectedNodeId: string | null;
   setSelectedNodeId: (id: string | null) => void;
 
-  // 添加 & 更新节点
+  // ---------- 节点操作 ----------
   addNode: (node: FlowNode) => void;
   updateNode: (id: string, data: Partial<FlowNode>) => void;
-
   updateNodePosition: (id: string, position: { x: number; y: number }) => void;
 
-  connectState: { mode: "idle" } | { mode: "connecting"; fromNodeId: string; fromAnchor: AnchorType };
+  // ---------- 连线 ----------
+  connectState: ConnectState;
   startConnect: (nodeId: string, anchor: AnchorType) => void;
   finishConnect: (toNodeId: string, anchor: AnchorType) => void;
   cancelConnect: () => void;
+
+  // ---------- ⭐ 真实锚点坐标 ----------
+  anchorPositions: Record<string, AnchorPosition>;
+  setAnchorPosition: (
+    nodeId: string,
+    anchor: AnchorType,
+    position: AnchorPosition
+  ) => void;
 };
 
 // =======================================================
-// 实现
+// Store 实现
 // =======================================================
 
 export const useFlowStore = create<FlowStore>((set, get) => ({
+  // ================= 节点 / 边 =================
   nodes: [],
   edges: [],
 
+  // ================= 画布 / 世界 =================
   canvasSize: { width: 0, height: 0 },
   worldSize: { width: 0, height: 0 },
 
@@ -100,9 +122,15 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
       };
     }),
 
+  // ================= ⭐ 视口（Pan） =================
+  viewportOffset: { x: 0, y: 0 },
+  setViewportOffset: (offset) => set({ viewportOffset: offset }),
+
+  // ================= 选中 =================
   selectedNodeId: null,
   setSelectedNodeId: (id) => set({ selectedNodeId: id }),
 
+  // ================= 节点操作 =================
   addNode: (node) =>
     set((state) => ({
       nodes: [...state.nodes, node],
@@ -121,17 +149,8 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
         nodes: state.nodes.map((n) => {
           if (n.id !== id) return n;
 
-          const x = clamp(
-            position.x,
-            0,
-            Math.max(0, width - NODE_WIDTH)
-          );
-
-          const y = clamp(
-            position.y,
-            0,
-            Math.max(0, height - NODE_HEIGHT)
-          );
+          const x = clamp(position.x, 0, Math.max(0, width - NODE_WIDTH));
+          const y = clamp(position.y, 0, Math.max(0, height - NODE_HEIGHT));
 
           return {
             ...n,
@@ -141,15 +160,28 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
       };
     }),
 
+  // ================= 连线状态 =================
   connectState: { mode: "idle" },
 
   startConnect: (nodeId, anchor) => {
-    set({ connectState: { mode: "connecting", fromNodeId: nodeId, fromAnchor: anchor } });
+    set({
+      connectState: {
+        mode: "connecting",
+        fromNodeId: nodeId,
+        fromAnchor: anchor,
+      },
+    });
   },
 
   finishConnect: (toNodeId, anchor) => {
     const connectState = get().connectState;
     if (connectState.mode !== "connecting") return;
+
+    // 防止自己连自己
+    if (connectState.fromNodeId === toNodeId) {
+      set({ connectState: { mode: "idle" } });
+      return;
+    }
 
     const newEdge: FlowEdge = {
       id: nanoid(),
@@ -166,12 +198,22 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
     set((state) => ({
       edges: [...state.edges, newEdge],
       connectState: { mode: "idle" },
+      selectedNodeId: null,
     }));
   },
 
   cancelConnect: () => {
     set({ connectState: { mode: "idle" } });
   },
-}));
-  
 
+  // ================= ⭐ 真实锚点坐标 =================
+  anchorPositions: {},
+
+  setAnchorPosition: (nodeId, anchor, position) =>
+    set((state) => ({
+      anchorPositions: {
+        ...state.anchorPositions,
+        [`${nodeId}:${anchor}`]: position,
+      },
+    })),
+}));

@@ -55,51 +55,74 @@
   z-index: 2;
 }
 
+/* 显示状态 */
+.ef-anchor.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 隐藏状态（关键） */
+.ef-anchor.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* =========================
    四个方向锚点定位
 ========================= */
 
+/* =========================
+   四个方向锚点（节点内部）
+========================= */
+
 .ef-anchor.top {
   left: 50%;
-  top: -6px;
-  transform: translate(-50%, -50%);
+  top: -5px;
+  transform: translate(-50%, 0);
 }
 
 .ef-anchor.right {
-  right: -6px;
+  right: -5px;
   top: 50%;
-  transform: translate(50%, -50%);
+  transform: translate(0, -50%);
 }
 
 .ef-anchor.bottom {
   left: 50%;
-  bottom: -6px;
-  transform: translate(-50%, 50%);
+  bottom: -5px;
+  transform: translate(-50%, 0);
 }
 
 .ef-anchor.left {
-  left: -6px;
+  left: -5px;
   top: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(0, -50%);
 }
 
 /* =========================
-   锚点 hover（预留）
+   锚点 hover（减弱效果版）
 ========================= */
 
+.ef-anchor {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
 
+/* top */
 .ef-anchor.top:hover {
-  transform: translate(-50%, -50%) scale(1.2);
+  transform: translate(-50%, 0) scale(1.1);
 }
 
+/* right */
 .ef-anchor.right:hover {
-  transform: translate(50%, -50%) scale(1.2);
+  transform: translate(0, -50%) scale(1.1);
 }
 
+/* bottom */
 .ef-anchor.bottom:hover {
-  transform: translate(-50%, 50%) scale(1.2);
+  transform: translate(-50%, 0) scale(1.1);
 }
 
+/* left */
 .ef-anchor.left:hover {
-  transform: translate(-50%, -50%) scale(1.2);
+  transform: translate(0, -50%) scale(1.1);
 }
