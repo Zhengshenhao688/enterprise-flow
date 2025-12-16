@@ -1,4 +1,3 @@
-//Canvas.tsx
 import React, { useEffect, useRef, useState } from "react";
 import { Typography } from "antd";
 import { useFlowStore } from "../../../store/flowStore";
@@ -15,13 +14,11 @@ const Canvas: React.FC = () => {
   const setSelectedNodeId = useFlowStore((s) => s.setSelectedNodeId);
   const setCanvasSize = useFlowStore((s) => s.setCanvasSize);
 
-  // ✅ viewport 统一来自 store
   const viewportOffset = useFlowStore((s) => s.viewportOffset);
   const setViewportOffset = useFlowStore((s) => s.setViewportOffset);
 
   const canvasRef = useRef<HTMLDivElement>(null);
 
-  // ===== Pan refs =====
   const isSpaceDownRef = useRef(false);
   const isPanningRef = useRef(false);
   const panStartMouseRef = useRef<Point>({ x: 0, y: 0 });
@@ -29,23 +26,19 @@ const Canvas: React.FC = () => {
 
   const [isSpaceDown, setIsSpaceDown] = useState(false);
 
-  // ================== 画布尺寸同步 ==================
   useEffect(() => {
     if (!canvasRef.current) return;
     const el = canvasRef.current;
-
     const updateSize = () => {
       const rect = el.getBoundingClientRect();
       setCanvasSize({ width: rect.width, height: rect.height });
     };
-
     updateSize();
     const ro = new ResizeObserver(updateSize);
     ro.observe(el);
     return () => ro.disconnect();
   }, [setCanvasSize]);
 
-  // ================== 空格键监听 ==================
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.code === "Space") {
@@ -68,7 +61,6 @@ const Canvas: React.FC = () => {
     };
   }, []);
 
-  // ================== Pan 移动 ==================
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
       if (!isPanningRef.current) return;
@@ -123,12 +115,9 @@ const Canvas: React.FC = () => {
         onDrop={(e) => {
           const type = e.dataTransfer.getData("node-type");
           if (!type) return;
-
           const rect = e.currentTarget.getBoundingClientRect();
-          // 注意：放入节点时，需要减去当前的 viewportOffset，转换为世界坐标
           const x = e.clientX - rect.left - viewportOffset.x;
           const y = e.clientY - rect.top - viewportOffset.y;
-
           addNode({
             id: Date.now().toString(),
             type,
@@ -148,7 +137,6 @@ const Canvas: React.FC = () => {
           cursor: isSpaceDown ? "grab" : "default",
         }}
       >
-        {/* ===== 世界容器：所有内容都受 Pan 影响 ===== */}
         <div
           style={{
             position: "absolute",
@@ -157,13 +145,10 @@ const Canvas: React.FC = () => {
             height: "100%",
             transform: `translate(${viewportOffset.x}px, ${viewportOffset.y}px)`,
             transformOrigin: "0 0",
-            pointerEvents: "none", // 容器本身不阻挡鼠标
+            pointerEvents: "none",
           }}
         >
-          {/* 1. 线层：现在位于世界坐标系中 */}
           <EdgesLayer />
-
-          {/* 2. 节点层：需要开启 pointerEvents */}
           <div style={{ pointerEvents: "auto", width: "100%", height: "100%" }}>
             {nodes.map((node) => (
               <NodeItem key={node.id} node={node} />

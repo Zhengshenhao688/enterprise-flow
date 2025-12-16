@@ -1,6 +1,7 @@
-// NodeItem.tsx
 import React from "react";
-import { useFlowStore } from "../../../store/flowStore";
+// ⭐ 修复：引入 Store 中的常量，用于强制设置 style
+import { useFlowStore, NODE_WIDTH, NODE_HEIGHT } from "../../../store/flowStore";
+// ⭐ 修复：使用 type 导入，解决 TS 1484/2322 错误
 import type { FlowNode, AnchorType } from "../../../store/flowStore";
 import "./nodeItem.css";
 
@@ -15,7 +16,6 @@ const NodeItem: React.FC<NodeItemProps> = ({ node }) => {
   const setSelectedNodeId = useFlowStore((s) => s.setSelectedNodeId);
   const updateNodePosition = useFlowStore((s) => s.updateNodePosition);
 
-  // ===== 连线相关 =====
   const connectState = useFlowStore((s) => s.connectState);
   const startConnect = useFlowStore((s) => s.startConnect);
   const finishConnect = useFlowStore((s) => s.finishConnect);
@@ -24,8 +24,6 @@ const NodeItem: React.FC<NodeItemProps> = ({ node }) => {
   const isConnecting =
     connectState.mode === "connecting" && connectState.fromNodeId === node.id;
 
-  // 连线中：显示所有锚点以便连接
-  // 非连线中：仅选中节点显示锚点
   const shouldShowAnchors = isSelected || connectState.mode === "connecting";
 
   return (
@@ -37,11 +35,18 @@ const NodeItem: React.FC<NodeItemProps> = ({ node }) => {
         position: "absolute",
         left: node.position.x,
         top: node.position.y,
+        // ⭐ 核心修复：强制 DOM 尺寸等于逻辑尺寸，防止 CSS padding 撑大导致连线错位
+        width: NODE_WIDTH,
+        height: NODE_HEIGHT,
+        // 辅助样式：确保文字居中
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        boxSizing: "border-box" 
       }}
       onMouseDown={(e) => {
         e.stopPropagation();
 
-        // 连线模式下，点击节点不应打断连线，也不应触发拖拽
         if (connectState.mode === "connecting") return;
 
         setSelectedNodeId(node.id);
@@ -69,10 +74,8 @@ const NodeItem: React.FC<NodeItemProps> = ({ node }) => {
         window.addEventListener("mouseup", onMouseUp);
       }}
     >
-      {/* 节点主体 */}
       <div className="ef-node__content">{node.name}</div>
 
-      {/* ===== 锚点 ===== */}
       {shouldShowAnchors &&
         anchors.map((anchor) => (
           <span
@@ -86,10 +89,8 @@ const NodeItem: React.FC<NodeItemProps> = ({ node }) => {
               e.preventDefault();
 
               if (connectState.mode === "idle") {
-                // 第一次点击：开始连线
                 startConnect(node.id, anchor);
               } else {
-                // 第二次点击：完成连线
                 finishConnect(node.id, anchor);
               }
             }}
