@@ -2,6 +2,27 @@ import { create } from "zustand";
 import { nanoid } from "nanoid";
 
 // =======================================================
+// 工具函数
+// =======================================================
+
+/**
+ * 将数值限制在指定区间内
+ * @param value 当前值
+ * @param min 最小值
+ * @param max 最大值
+ */
+export function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(value, max));
+}
+
+// =======================================================
+// 节点尺寸（用于边界限制）
+// 注意：这里是“节点盒子”占用尺寸（不含阴影），可按你的 NodeItem 实际样式调整
+// =======================================================
+const NODE_WIDTH = 100;
+const NODE_HEIGHT = 50;
+
+// =======================================================
 // 类型定义
 // =======================================================
 
@@ -34,6 +55,10 @@ type FlowStore = {
   nodes: FlowNode[];
   edges: FlowEdge[];
 
+  canvasSize: { width: number; height: number };
+  worldSize: { width: number; height: number };
+  setCanvasSize: (size: { width: number; height: number }) => void;
+
   // 节点选中
   selectedNodeId: string | null;
   setSelectedNodeId: (id: string | null) => void;
@@ -58,6 +83,23 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
   nodes: [],
   edges: [],
 
+  canvasSize: { width: 0, height: 0 },
+  worldSize: { width: 0, height: 0 },
+
+  setCanvasSize: (size) =>
+    set(() => {
+      const MIN_WORLD_WIDTH = 2000;
+      const MIN_WORLD_HEIGHT = 1200;
+
+      return {
+        canvasSize: size,
+        worldSize: {
+          width: Math.max(size.width, MIN_WORLD_WIDTH),
+          height: Math.max(size.height, MIN_WORLD_HEIGHT),
+        },
+      };
+    }),
+
   selectedNodeId: null,
   setSelectedNodeId: (id) => set({ selectedNodeId: id }),
 
@@ -72,11 +114,32 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
     })),
 
   updateNodePosition: (id, position) =>
-    set((state) => ({
-      nodes: state.nodes.map((n) =>
-        n.id === id ? { ...n, position } : n
-      ),
-    })),
+    set((state) => {
+      const { width, height } = state.worldSize;
+
+      return {
+        nodes: state.nodes.map((n) => {
+          if (n.id !== id) return n;
+
+          const x = clamp(
+            position.x,
+            0,
+            Math.max(0, width - NODE_WIDTH)
+          );
+
+          const y = clamp(
+            position.y,
+            0,
+            Math.max(0, height - NODE_HEIGHT)
+          );
+
+          return {
+            ...n,
+            position: { x, y },
+          };
+        }),
+      };
+    }),
 
   connectState: { mode: "idle" },
 
@@ -110,3 +173,5 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
     set({ connectState: { mode: "idle" } });
   },
 }));
+  
+
