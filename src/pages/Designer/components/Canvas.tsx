@@ -17,7 +17,6 @@ const Canvas: React.FC = () => {
   const viewportOffset = useFlowStore((s) => s.viewportOffset);
   const setViewportOffset = useFlowStore((s) => s.setViewportOffset);
 
-  // 🆕 获取删除方法
   const deleteSelected = useFlowStore((s) => s.deleteSelected);
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -42,11 +41,9 @@ const Canvas: React.FC = () => {
     return () => ro.disconnect();
   }, [setCanvasSize]);
 
-  // 🎹 键盘事件监听：Space (拖拽) + Delete/Backspace (删除)
+  // 🎹 键盘事件监听
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      // 1. 处理删除快捷键
-      // 检查当前焦点是否在输入框内，防止打字时误删节点
       const target = e.target as HTMLElement;
       const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
       
@@ -54,13 +51,11 @@ const Canvas: React.FC = () => {
         deleteSelected();
       }
 
-      // 2. 处理 Space 拖拽键
       if (e.code === "Space") {
         if (!isSpaceDownRef.current) {
           isSpaceDownRef.current = true;
           setIsSpaceDown(true);
         }
-        // 防止 Space 导致页面向下滚动
         e.preventDefault();
       }
     };
@@ -78,7 +73,7 @@ const Canvas: React.FC = () => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [deleteSelected]); // 依赖项加入 deleteSelected
+  }, [deleteSelected]);
 
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
@@ -117,8 +112,9 @@ const Canvas: React.FC = () => {
   };
 
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-      <div style={{ marginBottom: 8 }}>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* 顶部说明区域 - 稍微优化间距 */}
+      <div style={{ marginBottom: 12, paddingLeft: 4 }}>
         <Title level={4} style={{ margin: 0 }}>
           流程设计画布
         </Title>
@@ -152,8 +148,20 @@ const Canvas: React.FC = () => {
           flex: 1,
           position: "relative",
           overflow: "hidden",
-          border: "1px dashed #d9d9d9",
           cursor: isSpaceDown ? "grab" : "default",
+          
+          // ✨✨✨ 核心样式升级 ✨✨✨
+          backgroundColor: "#fff", // 纯白背景，与灰色底区分
+          borderRadius: 8,         // 圆角
+          boxShadow: "0 2px 8px rgba(0,0,0,0.06)", // 轻微阴影，增加层次感
+          border: "1px solid #f0f0f0", // 极淡的实线边框代替虚线
+
+          // 🎨 创建点状网格背景 (Miro/ReactFlow 风格)
+          backgroundImage: "radial-gradient(#d9d9d9 1.5px, transparent 1.5px)",
+          backgroundSize: "20px 20px", // 网格间距
+          
+          // 🚀 关键：让背景位置随 viewportOffset 移动，实现视差效果
+          backgroundPosition: `${viewportOffset.x}px ${viewportOffset.y}px`,
         }}
       >
         <div

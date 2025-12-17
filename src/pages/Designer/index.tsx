@@ -65,7 +65,6 @@ const DesignerPage: React.FC = () => {
           {/* 3. 发布按钮 (主要操作) */}
           <Button 
             type="primary" 
-            size="large" 
             icon={<SaveOutlined />} 
             onClick={handlePublish}
           >
