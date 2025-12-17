@@ -1,8 +1,7 @@
 import React from 'react';
-import { Card, Input, Select, Empty } from 'antd'; // 1. 引入 Select, Empty
+import { Card, Input, Select } from 'antd';
 import { useFlowStore } from '../../../store/flowStore';
 
-// 定义系统中的角色列表 (模拟)
 const ROLES = [
   { value: 'admin', label: '管理员 (Admin)' },
   { value: 'manager', label: '部门经理 (Manager)' },
@@ -11,35 +10,56 @@ const ROLES = [
 ];
 
 const PropertiesPanel: React.FC = () => {
-  const { nodes, selectedNodeId, updateNode } = useFlowStore();
+  const { 
+    nodes, 
+    selectedNodeId, 
+    updateNode,
+    processName,      // 🆕 获取流程名称
+    setProcessName    // 🆕 获取改名方法
+  } = useFlowStore();
   
-  // 获取当前选中的节点
   const node = nodes.find((n) => n.id === selectedNodeId);
 
+  // =========================================================
+  // 🆕 场景 A: 没有选中节点 -> 显示【全局流程配置】
+  // =========================================================
   if (!node) {
     return (
-      <Card title="属性面板" style={{ height: '100%' }}>
-        <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>
-           <Empty description="请点击选择一个节点" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+      <Card title="流程全局配置" style={{ height: '100%' }}>
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ marginBottom: 6, fontWeight: 500 }}>流程名称：</div>
+          <Input 
+            value={processName} 
+            onChange={(e) => setProcessName(e.target.value)} 
+            placeholder="例如：请假申请流程"
+            maxLength={20}
+            showCount
+          />
+        </div>
+        <div style={{ fontSize: 12, color: '#999', lineHeight: '1.6' }}>
+          <p>💡 操作提示：</p>
+          <ul style={{ paddingLeft: 16, margin: 0 }}>
+            <li>拖拽左侧节点到画布</li>
+            <li>点击锚点进行连线</li>
+            <li>选中节点可按 Delete 删除</li>
+            <li>配置完成后点击右上角“发布”</li>
+          </ul>
         </div>
       </Card>
     );
   }
 
-  // 处理角色变更
+  // =========================================================
+  // 场景 B: 选中了节点 -> 显示【节点属性】
+  // =========================================================
   const handleRoleChange = (value: string) => {
-    // 更新节点的 config 数据
     updateNode(node.id, {
-      config: {
-        ...node.config, // 保留原有的其他配置
-        approverRole: value,
-      },
+      config: { ...node.config, approverRole: value },
     });
   };
 
   return (
     <Card title="节点属性" style={{ height: '100%' }}>
-      {/* 1. 通用属性：节点名称 */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ marginBottom: 6, fontWeight: 500 }}>节点名称：</div>
         <Input
@@ -48,15 +68,11 @@ const PropertiesPanel: React.FC = () => {
         />
       </div>
 
-      {/* 2. 通用属性：节点类型 */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ marginBottom: 6, fontWeight: 500 }}>节点类型：</div>
         <Input value={node.type} disabled />
       </div>
 
-      {/* 3. 特有属性：审批角色配置 
-         仅当节点类型为 'approval' 时显示
-      */}
       {node.type === 'approval' && (
         <div style={{ marginBottom: 20, padding: '12px', background: '#f5f5f5', borderRadius: 6 }}>
           <div style={{ marginBottom: 6, fontWeight: 500, color: '#1677ff' }}>
@@ -68,7 +84,7 @@ const PropertiesPanel: React.FC = () => {
           <Select
             style={{ width: '100%' }}
             placeholder="请选择审批角色"
-            value={node.config?.approverRole} // 读取 Store 中的 config
+            value={node.config?.approverRole}
             onChange={handleRoleChange}
             options={ROLES}
           />
