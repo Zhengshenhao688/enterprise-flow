@@ -89,7 +89,6 @@ type FlowStore = {
   updateNode: (id: string, data: Partial<FlowNode>) => void;
   updateNodePosition: (id: string, position: { x: number; y: number }) => void;
   
-  // 🆕 新增：删除选中
   deleteSelected: () => void;
 
   connectState: ConnectState;
@@ -99,11 +98,10 @@ type FlowStore = {
 
   getProcessDefinition: () => ProcessDefinition;
 
-  // 🆕 新增：多流程管理能力
   publishedFlows: ProcessDefinition[];
   publishFlow: () => void;
-  resetFlow: () => void;               // 新建/重置画布
-  loadFlow: (flow: ProcessDefinition) => void; // 加载流程
+  resetFlow: () => void;
+  loadFlow: (flow: ProcessDefinition) => void;
 };
 
 // =======================================================
@@ -159,14 +157,11 @@ export const useFlowStore = create<FlowStore>()(
           };
         }),
 
-      // 🆕 实现删除逻辑
       deleteSelected: () => {
         const { selectedNodeId, nodes, edges } = get();
         if (!selectedNodeId) return;
 
-        // 删除节点
         const newNodes = nodes.filter(n => n.id !== selectedNodeId);
-        // 删除相关的线 (起点或终点是该节点的线都要删)
         const newEdges = edges.filter(
           edge => edge.from.nodeId !== selectedNodeId && edge.to.nodeId !== selectedNodeId
         );
@@ -191,17 +186,46 @@ export const useFlowStore = create<FlowStore>()(
       },
 
       finishConnect: (toNodeId, anchor) => {
-        const connectState = get().connectState;
+        const { connectState, nodes, edges } = get();
         if (connectState.mode !== "connecting") return;
         
-        if (connectState.fromNodeId === toNodeId) {
+        const fromNodeId = connectState.fromNodeId;
+
+        // 1. 禁止连接自己
+        if (fromNodeId === toNodeId) {
+          set({ connectState: { mode: "idle" } });
+          return;
+        }
+
+        // 2. 禁止重复连线 (A -> B 如果已经存在，就不再连)
+        const exists = edges.some(edge => 
+          edge.from.nodeId === fromNodeId && edge.to.nodeId === toNodeId
+        );
+        if (exists) {
+           console.warn("Edge already exists");
+           set({ connectState: { mode: "idle" } });
+           return;
+        }
+
+        // 3. 业务逻辑校验：Start 不能做 Target，End 不能做 Source
+        const fromNode = nodes.find(n => n.id === fromNodeId);
+        const toNode = nodes.find(n => n.id === toNodeId);
+
+        if (fromNode?.type === 'end') {
+          console.warn("End node cannot be a source");
+          set({ connectState: { mode: "idle" } });
+          return;
+        }
+
+        if (toNode?.type === 'start') {
+          console.warn("Start node cannot be a target");
           set({ connectState: { mode: "idle" } });
           return;
         }
 
         const newEdge: FlowEdge = {
           id: nanoid(),
-          from: { nodeId: connectState.fromNodeId, anchor: connectState.fromAnchor },
+          from: { nodeId: fromNodeId, anchor: connectState.fromAnchor },
           to: { nodeId: toNodeId, anchor },
         };
 
@@ -245,7 +269,6 @@ export const useFlowStore = create<FlowStore>()(
         });
       },
 
-      // 🆕 新建/重置画布
       resetFlow: () => {
         set({
           processId: nanoid(),
@@ -256,7 +279,6 @@ export const useFlowStore = create<FlowStore>()(
         });
       },
 
-      // 🆕 加载/打开流程
       loadFlow: (flow) => {
         set({
           processId: flow.id,
@@ -270,7 +292,6 @@ export const useFlowStore = create<FlowStore>()(
     {
       name: "enterprise-flow-storage",
       storage: createJSONStorage(() => localStorage),
-      // ⚠️ 确保 publishedFlows 在这里，否则刷新页面后模板库会丢失
       partialize: (state) => ({
         processId: state.processId,
         processName: state.processName,
