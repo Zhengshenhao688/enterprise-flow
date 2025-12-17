@@ -1,4 +1,3 @@
-//Canvas.tsx
 import React, { useEffect, useRef, useState } from "react";
 import { Typography } from "antd";
 import { useFlowStore } from "../../../store/flowStore";
@@ -17,6 +16,9 @@ const Canvas: React.FC = () => {
 
   const viewportOffset = useFlowStore((s) => s.viewportOffset);
   const setViewportOffset = useFlowStore((s) => s.setViewportOffset);
+
+  // 🆕 获取删除方法
+  const deleteSelected = useFlowStore((s) => s.deleteSelected);
 
   const canvasRef = useRef<HTMLDivElement>(null);
 
@@ -40,27 +42,43 @@ const Canvas: React.FC = () => {
     return () => ro.disconnect();
   }, [setCanvasSize]);
 
+  // 🎹 键盘事件监听：Space (拖拽) + Delete/Backspace (删除)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      // 1. 处理删除快捷键
+      // 检查当前焦点是否在输入框内，防止打字时误删节点
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+      
+      if (!isInput && (e.key === "Delete" || e.key === "Backspace")) {
+        deleteSelected();
+      }
+
+      // 2. 处理 Space 拖拽键
       if (e.code === "Space") {
-        isSpaceDownRef.current = true;
-        setIsSpaceDown(true);
+        if (!isSpaceDownRef.current) {
+          isSpaceDownRef.current = true;
+          setIsSpaceDown(true);
+        }
+        // 防止 Space 导致页面向下滚动
         e.preventDefault();
       }
     };
+
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === "Space") {
         isSpaceDownRef.current = false;
         setIsSpaceDown(false);
       }
     };
+
     window.addEventListener("keydown", onKeyDown, { passive: false });
     window.addEventListener("keyup", onKeyUp);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, []);
+  }, [deleteSelected]); // 依赖项加入 deleteSelected
 
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
@@ -105,7 +123,7 @@ const Canvas: React.FC = () => {
           流程设计画布
         </Title>
         <Text type="secondary" style={{ fontSize: 12 }}>
-          空格 / 中键拖动画布，点击锚点连线
+          空格+左键 / 中键拖动画布，选中节点按 Delete 删除
         </Text>
       </div>
 
