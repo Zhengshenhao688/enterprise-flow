@@ -1,22 +1,29 @@
 import React from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Card, Button, Descriptions, Tag, Typography, Empty, Space, message, } from "antd"; // 1. 引入 message, Divider
-import { ArrowLeftOutlined, CheckCircleOutlined, FileTextOutlined } from "@ant-design/icons"; // 2. 引入图标
+// 🆕 1. 引入 Timeline 组件
+import { Card, Button, Descriptions, Tag, Typography, Empty, Space, message, Timeline } from "antd";
+import { 
+  ArrowLeftOutlined, 
+  CheckCircleOutlined, 
+  CloseCircleOutlined, 
+  FileTextOutlined,
+  ClockCircleOutlined 
+} from "@ant-design/icons";
 import { useProcessInstanceStore } from "../../store/processInstanceStore";
 
-const { Title, Paragraph } = Typography;
+const { Title, Paragraph, Text } = Typography;
 
 const ApprovalDetail: React.FC = () => {
   const { instanceId } = useParams<{ instanceId: string }>();
   const navigate = useNavigate();
 
-  // 3. 获取数据与方法
   const instance = useProcessInstanceStore((s) => 
     instanceId ? s.instances[instanceId] : undefined
   );
-  const approve = useProcessInstanceStore((s) => s.approve); // 获取审批方法
+  const approve = useProcessInstanceStore((s) => s.approve);
+  // 🆕 2. 获取 reject 方法
+  const reject = useProcessInstanceStore((s) => s.reject);
 
-  // 防御性检查
   if (!instance) {
     return (
       <div style={{ padding: 40, textAlign: "center" }}>
@@ -26,28 +33,29 @@ const ApprovalDetail: React.FC = () => {
     );
   }
 
-  // 4. 定义审批操作处理函数
+  // 同意处理
   const handleApprove = () => {
     if (instanceId) {
-      // A. 调用 Store 核心方法推进流程
-      approve(instanceId);
-      
-      // B. 给出反馈
-      message.success("审批已通过，流程成功推进");
-      
-      // C. 跳转回列表页 (符合用户习惯的操作流：处理完 -> 回到清单处理下一个)
-      navigate("/approval");
+      approve(instanceId, "管理员"); // 这里可以传入当前登录用户名
+      message.success("审批已通过");
+      // 保持在当前页，让用户看到 timeline 变化，或者跳回列表均可
+      // navigate("/approval"); 
     }
   };
 
-  // 辅助变量
+  // 🆕 3. 拒绝处理
+  const handleReject = () => {
+    if (instanceId) {
+      reject(instanceId, "管理员");
+      message.error("审批已拒绝，流程终止");
+    }
+  };
+
   const isRunning = instance.status === "running";
-  // 安全获取表单数据 (处理 unknown 类型)
   const formData = instance.formData || {};
   const formTitle = String(formData['title'] || '未填写');
   const formReason = String(formData['reason'] || '未填写');
 
-  // 状态渲染辅助函数
   const renderStatusTag = (status: string) => {
     const map: Record<string, { color: string; text: string }> = {
       running: { color: "processing", text: "进行中" },
@@ -66,24 +74,18 @@ const ApprovalDetail: React.FC = () => {
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate("/approval")} type="text" />
           <div>
             <Title level={4} style={{ margin: 0 }}>审批详情</Title>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              单号: {instance.instanceId}
-            </Typography.Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>单号: {instance.instanceId}</Text>
           </div>
         </Space>
       </Card>
 
       <div style={{ maxWidth: 800, margin: "0 auto" }}>
         
-        {/* === 区域 1: 流程基础信息 === */}
+        {/* 区域 1: 基础信息 */}
         <Card bordered={false} style={{ marginBottom: 24 }}>
           <Descriptions title="流程信息" column={2}>
-            <Descriptions.Item label="流程名称">
-              <strong>{instance.definitionSnapshot.name}</strong>
-            </Descriptions.Item>
-            <Descriptions.Item label="当前状态">
-              {renderStatusTag(instance.status)}
-            </Descriptions.Item>
+            <Descriptions.Item label="流程名称"><strong>{instance.definitionSnapshot.name}</strong></Descriptions.Item>
+            <Descriptions.Item label="当前状态">{renderStatusTag(instance.status)}</Descriptions.Item>
             <Descriptions.Item label="当前节点">
               {isRunning ? <Tag color="blue">{instance.currentNodeId}</Tag> : "-"}
             </Descriptions.Item>
@@ -93,13 +95,8 @@ const ApprovalDetail: React.FC = () => {
           </Descriptions>
         </Card>
 
-        {/* === 区域 2: 业务表单数据 (Step 7.3) === */}
-        <Card 
-          title={<Space><FileTextOutlined /><span>申请内容</span></Space>} 
-          bordered={false} 
-          style={{ marginBottom: 24 }}
-        >
-          {/* 这里我们不再通用渲染，而是根据业务需求(ApplyPage)明确渲染特定字段 */}
+        {/* 区域 2: 业务表单 */}
+        <Card title={<Space><FileTextOutlined /><span>申请内容</span></Space>} bordered={false} style={{ marginBottom: 24 }}>
           <Descriptions column={1} bordered>
             <Descriptions.Item label="申请标题">
               <span style={{ fontSize: 16, fontWeight: 500 }}>{formTitle}</span>
@@ -108,22 +105,46 @@ const ApprovalDetail: React.FC = () => {
               <span style={{ whiteSpace: "pre-wrap" }}>{formReason}</span>
             </Descriptions.Item>
           </Descriptions>
-          
-          {/* 如果有额外未知的字段，也可以在这里做一个折叠面板展示，暂时省略 */}
         </Card>
 
-        {/* === 区域 3: 审批操作区 (Step 7.4) === */}
+        {/* 🆕 区域 3: 审批记录 (Timeline) */}
+        <Card title={<Space><ClockCircleOutlined /><span>审批记录</span></Space>} bordered={false} style={{ marginBottom: 24 }}>
+          <div style={{ marginTop: 12 }}>
+            <Timeline 
+              items={instance.logs?.map(log => ({
+                color: log.action === 'reject' ? 'red' : log.action === 'approve' ? 'green' : 'blue',
+                children: (
+                  <>
+                    <Text strong>{log.operator}</Text> 
+                    <Text type="secondary" style={{ marginLeft: 8 }}>{new Date(log.date).toLocaleString()}</Text>
+                    <div style={{ marginTop: 4 }}>
+                      <Tag>{log.action === 'submit' ? '发起' : log.action === 'approve' ? '通过' : '拒绝'}</Tag>
+                      {log.comment}
+                    </div>
+                  </>
+                )
+              }))}
+            />
+          </div>
+        </Card>
+
+        {/* 区域 4: 操作区 */}
         <Card title="审批处理" bordered={false} className="approval-action-card">
           {isRunning ? (
             <div style={{ textAlign: "center", padding: "20px 0" }}>
               <div style={{ marginBottom: 24, color: "#666" }}>
-                <Paragraph>
-                  请仔细核对上述申请内容。点击“同意”后，流程将流转至下一节点或结束。
-                </Paragraph>
+                <Paragraph>请仔细核对上述申请内容。点击操作后流程将自动流转。</Paragraph>
               </div>
               <Space size="large">
-                {/* 暂时不做拒绝功能 */}
-                <Button disabled>拒绝 / 退回</Button> 
+                {/* 🆕 4. 绑定拒绝按钮 */}
+                <Button 
+                  danger 
+                  size="large" 
+                  icon={<CloseCircleOutlined />}
+                  onClick={handleReject}
+                >
+                  拒绝 / 驳回
+                </Button> 
                 
                 <Button 
                   type="primary" 
@@ -136,11 +157,17 @@ const ApprovalDetail: React.FC = () => {
               </Space>
             </div>
           ) : (
-            // 非运行状态显示的提示
             <div style={{ textAlign: "center", padding: "30px 0", color: "#8c8c8c" }}>
-              <CheckCircleOutlined style={{ fontSize: 32, color: "#52c41a", marginBottom: 12 }} />
-              <Title level={5} style={{ color: "#52c41a" }}>流程已结束</Title>
-              <p>该申请已完成审批，无法进行操作。</p>
+              {/* 根据状态显示不同图标 */}
+              {instance.status === 'approved' ? (
+                <CheckCircleOutlined style={{ fontSize: 32, color: "#52c41a", marginBottom: 12 }} />
+              ) : (
+                <CloseCircleOutlined style={{ fontSize: 32, color: "#ff4d4f", marginBottom: 12 }} />
+              )}
+              <Title level={5} style={{ color: instance.status === 'approved' ? "#52c41a" : "#ff4d4f" }}>
+                {instance.status === 'approved' ? "流程已通过" : "流程已被拒绝"}
+              </Title>
+              <p>该申请已结束，无法进行操作。</p>
             </div>
           )}
         </Card>

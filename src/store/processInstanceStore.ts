@@ -3,9 +3,13 @@ import { nanoid } from "nanoid";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { ProcessDefinition } from "./flowStore";
 
-// =======================================================
-// 类型定义
-// =======================================================
+// 🆕 1. 定义审批日志结构
+export type ApprovalLog = {
+  date: number;
+  action: "submit" | "approve" | "reject";
+  operator: string; // 操作人 (例如: "张三", "管理员")
+  comment?: string; // 审批意见
+};
 
 export type InstanceStatus = "running" | "approved" | "rejected";
 
@@ -16,20 +20,19 @@ export type ProcessInstance = {
   status: InstanceStatus;
   definitionSnapshot: ProcessDefinition;
   createdAt: number;
-  /** 业务表单数据 */
   formData?: Record<string, unknown>;
+  // 🆕 2. 新增日志数组
+  logs: ApprovalLog[];
 };
 
 type ProcessInstanceStore = {
   instances: Record<string, ProcessInstance>;
   startProcess: (definition: ProcessDefinition, formData?: Record<string, unknown>) => string;
   getInstanceById: (instanceId: string) => ProcessInstance | undefined;
-  approve: (instanceId: string) => void;
+  approve: (instanceId: string, operator?: string) => void;
+  // 🆕 3. 新增拒绝方法
+  reject: (instanceId: string, operator?: string) => void;
 };
-
-// =======================================================
-// Store 实现 (带持久化)
-// =======================================================
 
 export const useProcessInstanceStore = create<ProcessInstanceStore>()(
   persist(
@@ -37,30 +40,32 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
       instances: {},
 
       startProcess: (definition: ProcessDefinition, formData = {}) => {
-        // 1. 寻找 Start 节点作为起始点
         const startNode = definition.nodes.find((n) => n.type === "start");
         const newInstanceId = nanoid();
+        const now = Date.now();
 
-        // 2. 构建实例对象
         const newInstance: ProcessInstance = {
           instanceId: newInstanceId,
           processDefinitionId: definition.id,
           currentNodeId: startNode ? startNode.id : null,
           status: "running",
           definitionSnapshot: definition,
-          createdAt: Date.now(),
-          formData: formData, 
+          createdAt: now,
+          formData: formData,
+          // 🆕 4. 初始化日志
+          logs: [
+            {
+              date: now,
+              action: "submit",
+              operator: "申请人", // 实际项目中应从 AuthStore 获取
+              comment: "发起流程申请",
+            },
+          ],
         };
 
-        // 3. 存入 Store
         set((state) => ({
-          instances: {
-            ...state.instances,
-            [newInstanceId]: newInstance,
-          },
+          instances: { ...state.instances, [newInstanceId]: newInstance },
         }));
-
-        console.log(`[Process] 实例创建成功: ${newInstanceId}, 携带数据:`, formData);
         return newInstanceId;
       },
 
@@ -69,26 +74,15 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
         return instances[instanceId];
       },
 
-      approve: (instanceId: string) => {
+      approve: (instanceId: string, operator = "管理员") => {
         set((state) => {
           const instance = state.instances[instanceId];
-          
-          if (!instance || instance.status !== "running") {
-            console.warn("❌ 审批失败：实例不存在或状态不是 running");
-            return state;
-          }
+          if (!instance || instance.status !== "running") return state;
 
           const { currentNodeId, definitionSnapshot } = instance;
+          const outgoingEdge = definitionSnapshot.edges.find((edge) => edge.from.nodeId === currentNodeId);
           
-          // 查找连线
-          const outgoingEdge = definitionSnapshot.edges.find(
-            (edge) => edge.from.nodeId === currentNodeId
-          );
-
-          if (!outgoingEdge) {
-            console.warn(`❌ 审批失败：节点 [${currentNodeId}] 没有找到向下的连线`);
-            return state;
-          }
+          if (!outgoingEdge) return state;
 
           const nextNodeId = outgoingEdge.to.nodeId;
           const nextNode = definitionSnapshot.nodes.find((n) => n.id === nextNodeId);
@@ -98,7 +92,13 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
             newStatus = "approved";
           }
 
-          console.log(`✅ 审批成功：从 [${currentNodeId}] -> [${nextNodeId}], 新状态: ${newStatus}`);
+          // 🆕 5. 记录通过日志
+          const newLog: ApprovalLog = {
+            date: Date.now(),
+            action: "approve",
+            operator,
+            comment: newStatus === "approved" ? "审批通过，流程结束" : "审批通过，进入下一节点",
+          };
 
           return {
             instances: {
@@ -107,6 +107,35 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
                 ...instance,
                 currentNodeId: nextNodeId,
                 status: newStatus,
+                logs: [...instance.logs, newLog],
+              },
+            },
+          };
+        });
+      },
+
+      // 🆕 6. 实现拒绝逻辑
+      reject: (instanceId: string, operator = "管理员") => {
+        set((state) => {
+          const instance = state.instances[instanceId];
+          if (!instance || instance.status !== "running") return state;
+
+          // 记录拒绝日志
+          const newLog: ApprovalLog = {
+            date: Date.now(),
+            action: "reject",
+            operator,
+            comment: "拒绝申请，流程终止",
+          };
+
+          return {
+            instances: {
+              ...state.instances,
+              [instanceId]: {
+                ...instance,
+                status: "rejected", // 状态变为已拒绝
+                currentNodeId: null, // 流程结束，无当前节点
+                logs: [...instance.logs, newLog],
               },
             },
           };
@@ -114,7 +143,7 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
       },
     }),
     {
-      name: "enterprise-instance-storage", // localStorage 中的 Key
+      name: "enterprise-instance-storage",
       storage: createJSONStorage(() => localStorage),
     }
   )
