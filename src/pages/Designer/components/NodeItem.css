@@ -3,144 +3,85 @@
 ========================= */
 
 .ef-node {
-  /* ⭐ 核心修复 1: 统一盒模型 */
-  /* 确保 JS 传进来的 width=120px 包含 padding，不会被撑大 */
   box-sizing: border-box; 
-  
   position: absolute;
-  overflow: visible;
-  /* padding 可以保留，因为有了 border-box，它只会挤压文字，不会撑大容器 */
-  padding: 0 10px; 
-  border-radius: 8px; /* 稍微减小圆角，让锚点看起来更贴合 */
+  
   background: #ffffff;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
-  cursor: pointer;
+  border: 1px solid #d9d9d9;
+  
+  /* ⭐ 修改点 1: 加大圆角，改为 20px (更圆润) */
+  border-radius: 20px; 
+  
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  
+  cursor: grab;
   user-select: none;
 
-  display: flex; /* 改用 flex 配合 JS 的 inline style */
+  /* ⭐ 修改点 2: 修复拖动卡顿！ */
+  /* ❌ 之前是 transition: all 0.2s; 会导致 left/top 也产生动画，造成拖动延迟 */
+  /* ✅ 现在只对边框和阴影做动画 */
+  transition: box-shadow 0.2s, border-color 0.2s;
+
+  display: flex;
   align-items: center;
   justify-content: center;
-  
-  /* 删除 max-width，因为 JS 已经强制了 width */
-  /* max-width: max-content; */
+  padding: 0 12px;
+  overflow: visible; 
 }
 
-/* =========================
-   选中态
-========================= */
+.ef-node:active {
+  cursor: grabbing;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
 
 .ef-node.is-selected {
-  outline: 2px solid #1677ff;
-  outline-offset: 0px; /* 贴紧边框，看起来更整齐 */
+  border-color: #1677ff;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.2);
+  z-index: 100;
 }
 
-/* =========================
-   节点内容
-========================= */
+.ef-node.is-connecting {
+  border-style: dashed;
+  border-color: #1677ff;
+}
 
-.ef-node__content {
+/* 文字样式 */
+.ef-node-label {
   font-size: 14px;
-  font-weight: 600;
-  color: #1f1f1f;
+  color: #333;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis; /* 防止文字太长撑破布局 */
-  width: 100%;
+  text-overflow: ellipsis;
   text-align: center;
+  width: 100%;
 }
 
-/* =========================
-   锚点通用样式
-========================= */
-
+/* 锚点样式 */
 .ef-anchor {
-  /* ⭐ 核心修复 2: 锁定盒模型 */
-  /* 让 width: 10px 包含 border。现在总尺寸严格为 10px */
   box-sizing: border-box;
-  
   position: absolute;
   width: 10px;
   height: 10px;
-  border-radius: 50%; /* 999px 改为 50% 更标准 */
-  background: #ffffff; /* 建议：白底蓝边，或者蓝底白边，看你喜好 */
-  border: 2px solid #1677ff; 
-  z-index: 10; /* 提高层级，确保压在连线上 */
-  
-  /* 交互区域扩充（可选）：让鼠标更容易点中 */
-  /* cursor: crosshair; */
+  background: #fff;
+  border: 2px solid #8c8c8c;
+  border-radius: 50%;
+  z-index: 10;
+  cursor: crosshair;
+  transition: transform 0.2s, background-color 0.2s; /* 只对缩放和颜色做动画 */
+  opacity: 0; 
 }
 
-/* 颜色反转方案：如果你想要蓝底白边（原本的设计） */
-.ef-anchor {
-  background: #1677ff;
-  border: 2px solid #ffffff;
-}
-
-/* 显示/隐藏状态 */
-.ef-anchor.visible {
+/* 只有选中或鼠标悬浮时才显示锚点 */
+.ef-node:hover .ef-anchor,
+.ef-node.is-selected .ef-anchor,
+.ef-node.is-connecting .ef-anchor {
   opacity: 1;
-  pointer-events: auto;
-  transition: all 0.2s;
+  border-color: #1677ff;
 }
 
-.ef-anchor.hidden {
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* =========================
-   四个方向锚点定位 (严格数学对齐)
-========================= */
-
-/* 计算逻辑：
-   锚点总宽/高 = 10px (因为 box-sizing: border-box)
-   半径 = 5px
-   为了让中心对齐边缘，需要偏移 -5px
-*/
-
-.ef-anchor.top {
-  left: 50%;
-  top: -5px; /* 严格等于 -1 * 半径 */
-  transform: translate(-50%, 0);
-}
-
-.ef-anchor.right {
-  right: -5px;
-  top: 50%;
-  transform: translate(0, -50%);
-}
-
-.ef-anchor.bottom {
-  left: 50%;
-  bottom: -5px;
-  transform: translate(-50%, 0);
-}
-
-.ef-anchor.left {
-  left: -5px;
-  top: 50%;
-  transform: translate(0, -50%);
-}
-
-/* =========================
-   锚点 hover 放大效果
-========================= */
-
-/* hover 时只需要放大 scale，不要改变 translate，否则会跑偏 */
-.ef-anchor:hover {
-  transform: scale(1.4); /* 这里会有问题，因为上面的 positioning 用了 translate */
-}
-
-/* 修正：因为上面的 positioning 用了 translate，hover 必须保留 translate */
-.ef-anchor.top:hover {
-  transform: translate(-50%, 0) scale(1.3);
-}
-.ef-anchor.right:hover {
-  transform: translate(0, -50%) scale(1.3);
-}
-.ef-anchor.bottom:hover {
-  transform: translate(-50%, 0) scale(1.3);
-}
-.ef-anchor.left:hover {
-  transform: translate(0, -50%) scale(1.3);
-}
+/* 锚点位置微调 */
+.ef-anchor.top { left: 50%; top: -5px; transform: translateX(-50%); }
+.ef-anchor.right { top: 50%; right: -5px; transform: translateY(-50%); }
+.ef-anchor.bottom { left: 50%; bottom: -5px; transform: translateX(-50%); }
+.ef-anchor.left { top: 50%; left: -5px; transform: translateY(-50%); }

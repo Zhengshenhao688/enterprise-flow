@@ -10,11 +10,37 @@ const { Title } = Typography;
 
 const DesignerPage: React.FC = () => {
   const publishFlow = useFlowStore((s) => s.publishFlow);
-  const resetFlow = useFlowStore((s) => s.resetFlow); // 🆕 获取重置方法
-  const loadFlow = useFlowStore((s) => s.loadFlow);   // 🆕 获取加载方法
-  const publishedFlows = useFlowStore((s) => s.publishedFlows); // 🆕 获取已发布列表
+  const resetFlow = useFlowStore((s) => s.resetFlow);
+  const loadFlow = useFlowStore((s) => s.loadFlow);
+  const publishedFlows = useFlowStore((s) => s.publishedFlows);
+  
+  // 获取获取蓝图的方法，用于校验
+  const getProcessDefinition = useFlowStore((s) => s.getProcessDefinition);
 
   const handlePublish = () => {
+    const definition = getProcessDefinition();
+
+    // 1. 基础非空校验
+    if (definition.nodes.length === 0) {
+      message.warning("画布为空，无法发布");
+      return;
+    }
+
+    // 2. 🆕 核心逻辑校验：必须有 Start 和 End
+    const hasStart = definition.nodes.some((node) => node.type === "start");
+    const hasEnd = definition.nodes.some((node) => node.type === "end");
+
+    if (!hasStart) {
+      message.error("❌ 发布失败：流程必须包含一个【开始节点】");
+      return;
+    }
+
+    if (!hasEnd) {
+      message.error("❌ 发布失败：流程必须包含一个【结束节点】");
+      return;
+    }
+
+    // 3. 校验通过，执行发布
     publishFlow();
     message.success("✅ 模板发布成功！可前往发起页查看。");
   };
@@ -37,7 +63,6 @@ const DesignerPage: React.FC = () => {
             placeholder="📂 打开已发布流程..."
             style={{ width: 220 }}
             dropdownMatchSelectWidth={false}
-            // 绑定 Select 的值，如果不绑定，切换后显示还是空的
             onChange={(id) => {
               const target = publishedFlows.find(f => f.id === id);
               if (target) {
@@ -65,6 +90,7 @@ const DesignerPage: React.FC = () => {
           {/* 3. 发布按钮 (主要操作) */}
           <Button 
             type="primary" 
+            size="large" 
             icon={<SaveOutlined />} 
             onClick={handlePublish}
           >

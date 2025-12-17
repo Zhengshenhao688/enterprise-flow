@@ -8,24 +8,28 @@ const { Title, Text } = Typography;
 
 type Point = { x: number; y: number };
 
+// ⭐ 新增：定义主流平台的默认节点名称映射
+const NODE_NAME_MAP: Record<string, string> = {
+  start: "发起人",
+  approval: "审批人",
+  end: "结束",
+  // 如果未来有抄送节点，可以加: cc: "抄送人"
+};
+
 const Canvas: React.FC = () => {
   const nodes = useFlowStore((s) => s.nodes);
   const addNode = useFlowStore((s) => s.addNode);
   const setSelectedNodeId = useFlowStore((s) => s.setSelectedNodeId);
   const setCanvasSize = useFlowStore((s) => s.setCanvasSize);
-
   const viewportOffset = useFlowStore((s) => s.viewportOffset);
   const setViewportOffset = useFlowStore((s) => s.setViewportOffset);
-
   const deleteSelected = useFlowStore((s) => s.deleteSelected);
 
   const canvasRef = useRef<HTMLDivElement>(null);
-
   const isSpaceDownRef = useRef(false);
   const isPanningRef = useRef(false);
   const panStartMouseRef = useRef<Point>({ x: 0, y: 0 });
   const panStartOffsetRef = useRef<Point>({ x: 0, y: 0 });
-
   const [isSpaceDown, setIsSpaceDown] = useState(false);
 
   useEffect(() => {
@@ -41,7 +45,6 @@ const Canvas: React.FC = () => {
     return () => ro.disconnect();
   }, [setCanvasSize]);
 
-  // 🎹 键盘事件监听
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -113,7 +116,6 @@ const Canvas: React.FC = () => {
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* 顶部说明区域 - 稍微优化间距 */}
       <div style={{ marginBottom: 12, paddingLeft: 4 }}>
         <Title level={4} style={{ margin: 0 }}>
           流程设计画布
@@ -133,10 +135,15 @@ const Canvas: React.FC = () => {
           const rect = e.currentTarget.getBoundingClientRect();
           const x = e.clientX - rect.left - viewportOffset.x;
           const y = e.clientY - rect.top - viewportOffset.y;
+          
+          // ⭐ 核心修改：使用映射表来设置默认名称
+          // 如果映射表中没有，就降级使用 type 原名
+          const defaultName = NODE_NAME_MAP[type] || type;
+
           addNode({
             id: Date.now().toString(),
             type,
-            name: type,
+            name: defaultName, // 这里不再是 name: type
             position: { x, y },
           });
         }}
@@ -148,20 +155,14 @@ const Canvas: React.FC = () => {
           flex: 1,
           position: "relative",
           overflow: "hidden",
-          cursor: isSpaceDown ? "grab" : "default",
-          
-          // ✨✨✨ 核心样式升级 ✨✨✨
-          backgroundColor: "#fff", // 纯白背景，与灰色底区分
-          borderRadius: 8,         // 圆角
-          boxShadow: "0 2px 8px rgba(0,0,0,0.06)", // 轻微阴影，增加层次感
-          border: "1px solid #f0f0f0", // 极淡的实线边框代替虚线
-
-          // 🎨 创建点状网格背景 (Miro/ReactFlow 风格)
+          backgroundColor: "#fff",
+          borderRadius: 8,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+          border: "1px solid #f0f0f0",
           backgroundImage: "radial-gradient(#d9d9d9 1.5px, transparent 1.5px)",
-          backgroundSize: "20px 20px", // 网格间距
-          
-          // 🚀 关键：让背景位置随 viewportOffset 移动，实现视差效果
+          backgroundSize: "20px 20px",
           backgroundPosition: `${viewportOffset.x}px ${viewportOffset.y}px`,
+          cursor: isSpaceDown ? "grab" : "default",
         }}
       >
         <div
