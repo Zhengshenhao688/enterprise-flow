@@ -13,7 +13,6 @@ export function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(value, max));
 }
 
-// 纯逻辑计算锚点坐标
 export function getAnchorCoordinate(position: { x: number; y: number }, anchor: AnchorType) {
   const { x, y } = position;
   switch (anchor) {
@@ -31,21 +30,14 @@ export function getAnchorCoordinate(position: { x: number; y: number }, anchor: 
 }
 
 // =======================================================
-// 类型定义 (Type Definitions)
+// 类型定义
 // =======================================================
 
 export type AnchorType = "top" | "right" | "bottom" | "left";
 
-export type Point = {
-  x: number;
-  y: number;
-};
+export type Point = { x: number; y: number };
 
-/**
- * 节点业务配置信息
- */
 export type NodeConfig = {
-  /** 指定该节点由哪个角色审批 (例如 "admin", "hr", "manager") */
   approverRole?: string;
 };
 
@@ -54,7 +46,6 @@ export type FlowNode = {
   type: string;
   name: string;
   position: { x: number; y: number };
-  /** 节点的配置数据 (可选) */
   config?: NodeConfig;
 };
 
@@ -71,52 +62,48 @@ export type ProcessDefinition = {
   edges: FlowEdge[];
 };
 
-// ================== 连线状态 ==================
-
 export type ConnectState =
   | { mode: "idle" }
   | { mode: "connecting"; fromNodeId: string; fromAnchor: AnchorType };
 
-// ================== Zustand Store 定义 ==================
+// ================== Store 定义 ==================
 
 type FlowStore = {
-  // --- 流程元数据 ---
   processId: string;
   processName: string;
   setProcessName: (name: string) => void;
 
-  // --- 画布核心数据 ---
   nodes: FlowNode[];
   edges: FlowEdge[];
   
-  // --- 画布视图状态 ---
   canvasSize: { width: number; height: number };
   worldSize: { width: number; height: number };
   setCanvasSize: (size: { width: number; height: number }) => void;
   viewportOffset: Point;
   setViewportOffset: (offset: Point) => void;
   
-  // --- 交互状态 ---
   selectedNodeId: string | null;
   setSelectedNodeId: (id: string | null) => void;
   
-  // --- 节点操作 ---
   addNode: (node: FlowNode) => void;
   updateNode: (id: string, data: Partial<FlowNode>) => void;
   updateNodePosition: (id: string, position: { x: number; y: number }) => void;
   
-  // --- 连线操作 ---
+  // 🆕 新增：删除选中
+  deleteSelected: () => void;
+
   connectState: ConnectState;
   startConnect: (nodeId: string, anchor: AnchorType) => void;
   finishConnect: (toNodeId: string, anchor: AnchorType) => void;
   cancelConnect: () => void;
 
-  // --- 数据导出 ---
   getProcessDefinition: () => ProcessDefinition;
 
-  // --- 🆕 流程模板管理 (Step 1 新增) ---
-  publishedFlows: ProcessDefinition[]; // 已发布的流程模板库
-  publishFlow: () => void;             // 将当前画布保存为模板
+  // 🆕 新增：多流程管理能力
+  publishedFlows: ProcessDefinition[];
+  publishFlow: () => void;
+  resetFlow: () => void;               // 新建/重置画布
+  loadFlow: (flow: ProcessDefinition) => void; // 加载流程
 };
 
 // =======================================================
@@ -126,7 +113,6 @@ type FlowStore = {
 export const useFlowStore = create<FlowStore>()(
   persist(
     (set, get) => ({
-      // 初始化元数据
       processId: nanoid(),
       processName: "未命名流程",
       setProcessName: (name) => set({ processName: name }),
@@ -137,17 +123,13 @@ export const useFlowStore = create<FlowStore>()(
       worldSize: { width: 0, height: 0 },
 
       setCanvasSize: (size) =>
-        set(() => {
-          const MIN_WORLD_WIDTH = 2000;
-          const MIN_WORLD_HEIGHT = 1200;
-          return {
-            canvasSize: size,
-            worldSize: {
-              width: Math.max(size.width, MIN_WORLD_WIDTH),
-              height: Math.max(size.height, MIN_WORLD_HEIGHT),
-            },
-          };
-        }),
+        set(() => ({
+          canvasSize: size,
+          worldSize: {
+            width: Math.max(size.width, 2000),
+            height: Math.max(size.height, 1200),
+          },
+        })),
 
       viewportOffset: { x: 0, y: 0 },
       setViewportOffset: (offset) => set({ viewportOffset: offset }),
@@ -177,6 +159,25 @@ export const useFlowStore = create<FlowStore>()(
           };
         }),
 
+      // 🆕 实现删除逻辑
+      deleteSelected: () => {
+        const { selectedNodeId, nodes, edges } = get();
+        if (!selectedNodeId) return;
+
+        // 删除节点
+        const newNodes = nodes.filter(n => n.id !== selectedNodeId);
+        // 删除相关的线 (起点或终点是该节点的线都要删)
+        const newEdges = edges.filter(
+          edge => edge.from.nodeId !== selectedNodeId && edge.to.nodeId !== selectedNodeId
+        );
+
+        set({
+          nodes: newNodes,
+          edges: newEdges,
+          selectedNodeId: null
+        });
+      },
+
       connectState: { mode: "idle" },
 
       startConnect: (nodeId, anchor) => {
@@ -193,7 +194,6 @@ export const useFlowStore = create<FlowStore>()(
         const connectState = get().connectState;
         if (connectState.mode !== "connecting") return;
         
-        // 禁止自连
         if (connectState.fromNodeId === toNodeId) {
           set({ connectState: { mode: "idle" } });
           return;
@@ -226,13 +226,10 @@ export const useFlowStore = create<FlowStore>()(
         };
       },
 
-      // --- 🆕 Step 1: 流程模板管理实现 ---
       publishedFlows: [],
       
       publishFlow: () => {
         const { processId, processName, nodes, edges } = get();
-        
-        // 1. 构建当前画布的蓝图
         const newDefinition: ProcessDefinition = {
           id: processId,
           name: processName,
@@ -240,27 +237,46 @@ export const useFlowStore = create<FlowStore>()(
           edges,
         };
 
-        // 2. 存入 publishedFlows (Upsert 逻辑: ID相同则覆盖)
         set((state) => {
           const others = state.publishedFlows.filter((f) => f.id !== processId);
           return {
             publishedFlows: [...others, newDefinition],
           };
         });
+      },
 
-        console.log("✅ 流程模板已发布:", newDefinition);
+      // 🆕 新建/重置画布
+      resetFlow: () => {
+        set({
+          processId: nanoid(),
+          processName: "新业务流程",
+          nodes: [],
+          edges: [],
+          selectedNodeId: null,
+        });
+      },
+
+      // 🆕 加载/打开流程
+      loadFlow: (flow) => {
+        set({
+          processId: flow.id,
+          processName: flow.name,
+          nodes: flow.nodes,
+          edges: flow.edges,
+          selectedNodeId: null,
+        });
       },
     }),
     {
-      name: "enterprise-flow-storage", 
+      name: "enterprise-flow-storage",
       storage: createJSONStorage(() => localStorage),
-      // ⚠️ 更新持久化白名单，加上 publishedFlows
+      // ⚠️ 确保 publishedFlows 在这里，否则刷新页面后模板库会丢失
       partialize: (state) => ({
         processId: state.processId,
         processName: state.processName,
         nodes: state.nodes,
         edges: state.edges,
-        publishedFlows: state.publishedFlows, // 新增
+        publishedFlows: state.publishedFlows,
       }),
     }
   )
