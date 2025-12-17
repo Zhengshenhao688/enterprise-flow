@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 
 type UserRole = 'admin' | 'user' | null;
 
@@ -9,32 +10,34 @@ interface AuthState {
   logout: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  token: localStorage.getItem('token'),
-  role: (localStorage.getItem('role') as UserRole) || null,
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      token: null,
+      role: null,
 
-  // 简单模拟登录逻辑
-  login: (username, password) => {
-    if (username === 'admin' && password === '123456') {
-      localStorage.setItem('token', 'admin-token');
-      localStorage.setItem('role', 'admin');
-      set({ token: 'admin-token', role: 'admin' });
-      return true;
+      login: (username, password) => {
+        // 模拟后端验证逻辑
+        if (username === 'admin' && password === '123456') {
+          set({ token: 'admin-token', role: 'admin' });
+          return true;
+        }
+
+        if (username === 'user' && password === '123456') {
+          set({ token: 'user-token', role: 'user' });
+          return true;
+        }
+
+        return false;
+      },
+
+      logout: () => {
+        set({ token: null, role: null });
+      },
+    }),
+    {
+      name: 'enterprise-auth-storage', // 存储在 localStorage 的 key
+      storage: createJSONStorage(() => localStorage),
     }
-
-    if (username === 'user' && password === '123456') {
-      localStorage.setItem('token', 'user-token');
-      localStorage.setItem('role', 'user');
-      set({ token: 'user-token', role: 'user' });
-      return true;
-    }
-
-    return false;
-  },
-
-  logout: () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('role');
-    set({ token: null, role: null });
-  },
-}));
+  )
+);

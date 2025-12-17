@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import AppLayout from "../components/Layout";
 import Login from "../pages/Login";
 import Designer from "../pages/Designer";
@@ -15,22 +15,53 @@ const router = createBrowserRouter([
   },
   {
     path: "/",
+    // 最外层守卫：确保所有子路由都必须登录
     element: (
       <ProtectedRoute>
         <AppLayout />
       </ProtectedRoute>
     ),
     children: [
-      { path: "designer", element: <Designer /> },
-      { path: "approval", element: <Approval /> },
-      { path: "dashboard", element: <Dashboard /> },
-
-      // ✅ 员工发起页（正式入口）
-      { path: "apply", element: <ApplyPage /> },
       {
-        path: "/approval/:instanceId",
-        element: <ApprovalDetailPage />,
+        path: "/", 
+        element: <Navigate to="/apply" replace /> 
       },
+      // 🔒 仅管理员可访问
+      { 
+        path: "designer", 
+        element: (
+          <ProtectedRoute allowedRoles={['admin']}>
+            <Designer />
+          </ProtectedRoute>
+        ) 
+      },
+      { 
+        path: "approval", 
+        element: (
+          <ProtectedRoute allowedRoles={['admin']}>
+            <Approval />
+          </ProtectedRoute>
+        ) 
+      },
+      { 
+        path: "approval/:instanceId", 
+        element: (
+          <ProtectedRoute allowedRoles={['admin']}>
+            <ApprovalDetailPage />
+          </ProtectedRoute>
+        ) 
+      },
+      { 
+        path: "dashboard", 
+        element: (
+          <ProtectedRoute allowedRoles={['admin']}>
+            <Dashboard />
+          </ProtectedRoute>
+        ) 
+      },
+
+      // 🌍 普通员工 + 管理员均可访问
+      { path: "apply", element: <ApplyPage /> },
     ],
   },
 ]);
