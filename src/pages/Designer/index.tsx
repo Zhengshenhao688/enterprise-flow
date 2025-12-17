@@ -1,3 +1,4 @@
+//index.tsx
 import React from "react";
 import PropertiesPanel from "./components/PropertiesPanel";
 import NodePanel from "./components/NodePanel";

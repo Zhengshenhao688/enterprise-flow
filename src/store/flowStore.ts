@@ -5,7 +5,6 @@ import { nanoid } from "nanoid";
 // 工具函数 & 常量
 // =======================================================
 
-// ⭐ 修复：调整为 120x60，适配你的截图视觉大小
 export const NODE_WIDTH = 120;
 export const NODE_HEIGHT = 60;
 
@@ -13,7 +12,7 @@ export function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(value, max));
 }
 
-// ⭐ 纯逻辑计算锚点坐标
+// 纯逻辑计算锚点坐标
 export function getAnchorCoordinate(position: { x: number; y: number }, anchor: AnchorType) {
   const { x, y } = position;
   switch (anchor) {
@@ -31,7 +30,7 @@ export function getAnchorCoordinate(position: { x: number; y: number }, anchor: 
 }
 
 // =======================================================
-// 类型定义
+// 类型定义 (Type Definitions)
 // =======================================================
 
 export type AnchorType = "top" | "right" | "bottom" | "left";
@@ -54,6 +53,17 @@ export type FlowEdge = {
   to: { nodeId: string; anchor: AnchorType };
 };
 
+/**
+ * 核心：流程模板定义结构
+ * 这是「设计态」的最终产物，用于保存到数据库
+ */
+export type ProcessDefinition = {
+  id: string;
+  name: string;
+  nodes: FlowNode[];
+  edges: FlowEdge[];
+};
+
 // ================== 连线状态 ==================
 
 export type ConnectState =
@@ -63,22 +73,40 @@ export type ConnectState =
 // ================== Zustand Store 定义 ==================
 
 type FlowStore = {
+  // --- 流程元数据 ---
+  processId: string;
+  processName: string;
+  setProcessName: (name: string) => void;
+
+  // --- 画布核心数据 ---
   nodes: FlowNode[];
   edges: FlowEdge[];
+  
+  // --- 画布视图状态 ---
   canvasSize: { width: number; height: number };
   worldSize: { width: number; height: number };
   setCanvasSize: (size: { width: number; height: number }) => void;
   viewportOffset: Point;
   setViewportOffset: (offset: Point) => void;
+  
+  // --- 交互状态 ---
   selectedNodeId: string | null;
   setSelectedNodeId: (id: string | null) => void;
+  
+  // --- 节点操作 ---
   addNode: (node: FlowNode) => void;
   updateNode: (id: string, data: Partial<FlowNode>) => void;
   updateNodePosition: (id: string, position: { x: number; y: number }) => void;
+  
+  // --- 连线操作 ---
   connectState: ConnectState;
   startConnect: (nodeId: string, anchor: AnchorType) => void;
   finishConnect: (toNodeId: string, anchor: AnchorType) => void;
   cancelConnect: () => void;
+
+  // --- 数据导出 ---
+  /** 获取当前流程定义的快照（用于保存） */
+  getProcessDefinition: () => ProcessDefinition;
 };
 
 // =======================================================
@@ -86,6 +114,11 @@ type FlowStore = {
 // =======================================================
 
 export const useFlowStore = create<FlowStore>((set, get) => ({
+  // 初始化元数据
+  processId: nanoid(),
+  processName: "未命名流程",
+  setProcessName: (name) => set({ processName: name }),
+
   nodes: [],
   edges: [],
   canvasSize: { width: 0, height: 0 },
@@ -95,7 +128,6 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
     set(() => {
       const MIN_WORLD_WIDTH = 2000;
       const MIN_WORLD_HEIGHT = 1200;
-
       return {
         canvasSize: size,
         worldSize: {
@@ -148,15 +180,19 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
   finishConnect: (toNodeId, anchor) => {
     const connectState = get().connectState;
     if (connectState.mode !== "connecting") return;
+    
+    // 禁止自连
     if (connectState.fromNodeId === toNodeId) {
       set({ connectState: { mode: "idle" } });
       return;
     }
+
     const newEdge: FlowEdge = {
       id: nanoid(),
       from: { nodeId: connectState.fromNodeId, anchor: connectState.fromAnchor },
       to: { nodeId: toNodeId, anchor },
     };
+
     set((state) => ({
       edges: [...state.edges, newEdge],
       connectState: { mode: "idle" },
@@ -166,5 +202,19 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
 
   cancelConnect: () => {
     set({ connectState: { mode: "idle" } });
+  },
+
+  // --- 核心方法实现 ---
+  getProcessDefinition: () => {
+    // 解构获取当前 Store 中的最新数据
+    const { processId, processName, nodes, edges } = get();
+    
+    // 组装并返回 ProcessDefinition 对象
+    return {
+      id: processId,
+      name: processName,
+      nodes,
+      edges,
+    };
   },
 }));

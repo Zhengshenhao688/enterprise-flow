@@ -1,3 +1,4 @@
+//NodeItem.tsx
 import React from "react";
 // ⭐ 修复：引入 Store 中的常量，用于强制设置 style
 import { useFlowStore, NODE_WIDTH, NODE_HEIGHT } from "../../../store/flowStore";

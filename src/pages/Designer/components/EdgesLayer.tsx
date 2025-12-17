@@ -1,3 +1,4 @@
+//EdgeLayer.tsx
 import React, { useMemo } from "react";
 // ⭐ 修复：使用 type 关键字导入 FlowNode，解决 TS1484
 import { useFlowStore, getAnchorCoordinate, type FlowNode } from "../../../store/flowStore";
