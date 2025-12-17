@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
-// 1. 引入持久化中间件
 import { persist, createJSONStorage } from "zustand/middleware";
 
 // =======================================================
@@ -43,8 +42,7 @@ export type Point = {
 };
 
 /**
- * [Step 1 新增] 节点业务配置信息
- * 用于存储节点的审批规则、扩展属性等
+ * 节点业务配置信息
  */
 export type NodeConfig = {
   /** 指定该节点由哪个角色审批 (例如 "admin", "hr", "manager") */
@@ -56,7 +54,7 @@ export type FlowNode = {
   type: string;
   name: string;
   position: { x: number; y: number };
-  /** [Step 1 新增] 节点的配置数据 (可选) */
+  /** 节点的配置数据 (可选) */
   config?: NodeConfig;
 };
 
@@ -115,6 +113,10 @@ type FlowStore = {
 
   // --- 数据导出 ---
   getProcessDefinition: () => ProcessDefinition;
+
+  // --- 🆕 流程模板管理 (Step 1 新增) ---
+  publishedFlows: ProcessDefinition[]; // 已发布的流程模板库
+  publishFlow: () => void;             // 将当前画布保存为模板
 };
 
 // =======================================================
@@ -223,16 +225,42 @@ export const useFlowStore = create<FlowStore>()(
           edges,
         };
       },
+
+      // --- 🆕 Step 1: 流程模板管理实现 ---
+      publishedFlows: [],
+      
+      publishFlow: () => {
+        const { processId, processName, nodes, edges } = get();
+        
+        // 1. 构建当前画布的蓝图
+        const newDefinition: ProcessDefinition = {
+          id: processId,
+          name: processName,
+          nodes,
+          edges,
+        };
+
+        // 2. 存入 publishedFlows (Upsert 逻辑: ID相同则覆盖)
+        set((state) => {
+          const others = state.publishedFlows.filter((f) => f.id !== processId);
+          return {
+            publishedFlows: [...others, newDefinition],
+          };
+        });
+
+        console.log("✅ 流程模板已发布:", newDefinition);
+      },
     }),
     {
-      name: "enterprise-flow-storage", // localStorage Key
+      name: "enterprise-flow-storage", 
       storage: createJSONStorage(() => localStorage),
-      // 过滤不需要保存的临时状态（如拖拽中的连线状态、选中状态）
+      // ⚠️ 更新持久化白名单，加上 publishedFlows
       partialize: (state) => ({
         processId: state.processId,
         processName: state.processName,
         nodes: state.nodes,
         edges: state.edges,
+        publishedFlows: state.publishedFlows, // 新增
       }),
     }
   )
