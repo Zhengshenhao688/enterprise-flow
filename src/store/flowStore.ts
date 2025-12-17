@@ -68,7 +68,6 @@ export type ConnectState =
       mode: "connecting"; 
       fromNodeId: string; 
       fromAnchor: AnchorType;
-      // 🆕 新增：记录鼠标当前位置，用于画橡皮筋线
       cursorPosition?: { x: number; y: number } 
     };
 
@@ -91,7 +90,6 @@ type FlowStore = {
   selectedNodeId: string | null;
   setSelectedNodeId: (id: string | null) => void;
   
-  // 🆕 选中连线ID
   selectedEdgeId: string | null;
   setSelectedEdgeId: (id: string | null) => void;
   
@@ -103,12 +101,14 @@ type FlowStore = {
 
   connectState: ConnectState;
   startConnect: (nodeId: string, anchor: AnchorType) => void;
-  // 🆕 更新连接时的鼠标位置
   updateConnectCursor: (position: { x: number; y: number }) => void;
   finishConnect: (toNodeId: string, anchor: AnchorType) => void;
   cancelConnect: () => void;
 
   getProcessDefinition: () => ProcessDefinition;
+
+  // 🆕 校验函数
+  validateFlow: () => { success: boolean; error?: string };
 
   publishedFlows: ProcessDefinition[];
   publishFlow: () => void;
@@ -145,10 +145,10 @@ export const useFlowStore = create<FlowStore>()(
       setViewportOffset: (offset) => set({ viewportOffset: offset }),
       
       selectedNodeId: null,
-      setSelectedNodeId: (id) => set({ selectedNodeId: id, selectedEdgeId: null }), // 互斥
+      setSelectedNodeId: (id) => set({ selectedNodeId: id, selectedEdgeId: null }),
       
       selectedEdgeId: null,
-      setSelectedEdgeId: (id) => set({ selectedEdgeId: id, selectedNodeId: null }), // 互斥
+      setSelectedEdgeId: (id) => set({ selectedEdgeId: id, selectedNodeId: null }),
 
       addNode: (node) =>
         set((state) => ({
@@ -176,7 +176,6 @@ export const useFlowStore = create<FlowStore>()(
       deleteSelected: () => {
         const { selectedNodeId, selectedEdgeId, nodes, edges } = get();
         
-        // 删除节点
         if (selectedNodeId) {
           const newNodes = nodes.filter(n => n.id !== selectedNodeId);
           const newEdges = edges.filter(
@@ -190,7 +189,6 @@ export const useFlowStore = create<FlowStore>()(
           return;
         }
 
-        // 删除连线
         if (selectedEdgeId) {
           const newEdges = edges.filter(edge => edge.id !== selectedEdgeId);
           set({
@@ -283,6 +281,69 @@ export const useFlowStore = create<FlowStore>()(
           nodes,
           edges,
         };
+      },
+
+      // 🆕 核心算法：图逻辑校验
+      validateFlow: () => {
+        const { nodes, edges } = get();
+
+        // 1. 存在性检查
+        const startNode = nodes.find(n => n.type === 'start');
+        const endNode = nodes.find(n => n.type === 'end');
+
+        if (!startNode) return { success: false, error: '缺少【发起人】节点' };
+        if (!endNode) return { success: false, error: '缺少【结束】节点' };
+
+        // 2. 连通性检查 (BFS 算法)
+        // 构建邻接表
+        const adj = new Map<string, string[]>();
+        nodes.forEach(n => adj.set(n.id, []));
+        edges.forEach(e => {
+          const list = adj.get(e.from.nodeId);
+          if (list) list.push(e.to.nodeId);
+        });
+
+        // 开始遍历
+        const queue = [startNode.id];
+        const visited = new Set<string>([startNode.id]);
+        let reachedEnd = false;
+
+        while(queue.length > 0) {
+          const curr = queue.shift()!;
+          if (curr === endNode.id) {
+            reachedEnd = true;
+          }
+          const neighbors = adj.get(curr) || [];
+          for (const next of neighbors) {
+            if (!visited.has(next)) {
+              visited.add(next);
+              queue.push(next);
+            }
+          }
+        }
+
+        if (!reachedEnd) {
+          return { success: false, error: '❌ 流程断路：从【发起人】无法流转到【结束】节点，请检查连线。' };
+        }
+
+        // 3. 孤儿节点与完整性检查
+        for (const node of nodes) {
+          const outEdges = edges.filter(e => e.from.nodeId === node.id);
+          const inEdges = edges.filter(e => e.to.nodeId === node.id);
+
+          if (node.type === 'start' && outEdges.length === 0) {
+            return { success: false, error: '❌【发起人】必须有输出连线' };
+          }
+          
+          if (node.type === 'approval') {
+            if (inEdges.length === 0) return { success: false, error: `❌【${node.name}】缺少输入连线` };
+            if (outEdges.length === 0) return { success: false, error: `❌【${node.name}】缺少输出连线（死胡同）` };
+          }
+          
+          // end 节点前面 BFS 已经保证了可达性，所以隐含了 inEdges > 0
+        }
+
+        return { success: true };
       },
 
       publishedFlows: [],

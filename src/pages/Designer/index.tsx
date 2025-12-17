@@ -14,35 +14,22 @@ const DesignerPage: React.FC = () => {
   const loadFlow = useFlowStore((s) => s.loadFlow);
   const publishedFlows = useFlowStore((s) => s.publishedFlows);
   
-  // 获取获取蓝图的方法，用于校验
-  const getProcessDefinition = useFlowStore((s) => s.getProcessDefinition);
+  // 🆕 获取校验方法
+  const validateFlow = useFlowStore((s) => s.validateFlow);
 
   const handlePublish = () => {
-    const definition = getProcessDefinition();
+    // 1. 执行图逻辑校验 (BFS + 规则检查)
+    const result = validateFlow();
 
-    // 1. 基础非空校验
-    if (definition.nodes.length === 0) {
-      message.warning("画布为空，无法发布");
-      return;
-    }
-
-    // 2. 🆕 核心逻辑校验：必须有 Start 和 End
-    const hasStart = definition.nodes.some((node) => node.type === "start");
-    const hasEnd = definition.nodes.some((node) => node.type === "end");
-
-    if (!hasStart) {
-      message.error("❌ 发布失败：流程必须包含一个【开始节点】");
-      return;
-    }
-
-    if (!hasEnd) {
-      message.error("❌ 发布失败：流程必须包含一个【结束节点】");
+    // 2. 如果校验失败，弹出错误并终止发布
+    if (!result.success) {
+      message.error(result.error);
       return;
     }
 
     // 3. 校验通过，执行发布
     publishFlow();
-    message.success("✅ 模板发布成功！可前往发起页查看。");
+    message.success("校验通过，模板已成功发布！");
   };
 
   const handleCreateNew = () => {
