@@ -10,6 +10,7 @@ export default function AppLayout() {
     { key: '/designer', label: '流程设计器' },
     { key: '/approval', label: '审批中心' },
     { key: '/dashboard', label: '数据看板' },
+    { key: '/apply', label: '发起申请' },
   ];
 
   return (
