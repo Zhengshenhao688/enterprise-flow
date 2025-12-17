@@ -64,7 +64,13 @@ export type ProcessDefinition = {
 
 export type ConnectState =
   | { mode: "idle" }
-  | { mode: "connecting"; fromNodeId: string; fromAnchor: AnchorType };
+  | { 
+      mode: "connecting"; 
+      fromNodeId: string; 
+      fromAnchor: AnchorType;
+      // 🆕 新增：记录鼠标当前位置，用于画橡皮筋线
+      cursorPosition?: { x: number; y: number } 
+    };
 
 // ================== Store 定义 ==================
 
@@ -85,6 +91,10 @@ type FlowStore = {
   selectedNodeId: string | null;
   setSelectedNodeId: (id: string | null) => void;
   
+  // 🆕 选中连线ID
+  selectedEdgeId: string | null;
+  setSelectedEdgeId: (id: string | null) => void;
+  
   addNode: (node: FlowNode) => void;
   updateNode: (id: string, data: Partial<FlowNode>) => void;
   updateNodePosition: (id: string, position: { x: number; y: number }) => void;
@@ -93,6 +103,8 @@ type FlowStore = {
 
   connectState: ConnectState;
   startConnect: (nodeId: string, anchor: AnchorType) => void;
+  // 🆕 更新连接时的鼠标位置
+  updateConnectCursor: (position: { x: number; y: number }) => void;
   finishConnect: (toNodeId: string, anchor: AnchorType) => void;
   cancelConnect: () => void;
 
@@ -131,8 +143,12 @@ export const useFlowStore = create<FlowStore>()(
 
       viewportOffset: { x: 0, y: 0 },
       setViewportOffset: (offset) => set({ viewportOffset: offset }),
+      
       selectedNodeId: null,
-      setSelectedNodeId: (id) => set({ selectedNodeId: id }),
+      setSelectedNodeId: (id) => set({ selectedNodeId: id, selectedEdgeId: null }), // 互斥
+      
+      selectedEdgeId: null,
+      setSelectedEdgeId: (id) => set({ selectedEdgeId: id, selectedNodeId: null }), // 互斥
 
       addNode: (node) =>
         set((state) => ({
@@ -158,19 +174,30 @@ export const useFlowStore = create<FlowStore>()(
         }),
 
       deleteSelected: () => {
-        const { selectedNodeId, nodes, edges } = get();
-        if (!selectedNodeId) return;
+        const { selectedNodeId, selectedEdgeId, nodes, edges } = get();
+        
+        // 删除节点
+        if (selectedNodeId) {
+          const newNodes = nodes.filter(n => n.id !== selectedNodeId);
+          const newEdges = edges.filter(
+            edge => edge.from.nodeId !== selectedNodeId && edge.to.nodeId !== selectedNodeId
+          );
+          set({
+            nodes: newNodes,
+            edges: newEdges,
+            selectedNodeId: null
+          });
+          return;
+        }
 
-        const newNodes = nodes.filter(n => n.id !== selectedNodeId);
-        const newEdges = edges.filter(
-          edge => edge.from.nodeId !== selectedNodeId && edge.to.nodeId !== selectedNodeId
-        );
-
-        set({
-          nodes: newNodes,
-          edges: newEdges,
-          selectedNodeId: null
-        });
+        // 删除连线
+        if (selectedEdgeId) {
+          const newEdges = edges.filter(edge => edge.id !== selectedEdgeId);
+          set({
+            edges: newEdges,
+            selectedEdgeId: null
+          });
+        }
       },
 
       connectState: { mode: "idle" },
@@ -181,8 +208,21 @@ export const useFlowStore = create<FlowStore>()(
             mode: "connecting",
             fromNodeId: nodeId,
             fromAnchor: anchor,
+            cursorPosition: undefined,
           },
         });
+      },
+
+      updateConnectCursor: (position) => {
+        const { connectState } = get();
+        if (connectState.mode === "connecting") {
+          set({
+            connectState: {
+              ...connectState,
+              cursorPosition: position,
+            }
+          });
+        }
       },
 
       finishConnect: (toNodeId, anchor) => {
@@ -191,34 +231,28 @@ export const useFlowStore = create<FlowStore>()(
         
         const fromNodeId = connectState.fromNodeId;
 
-        // 1. 禁止连接自己
         if (fromNodeId === toNodeId) {
           set({ connectState: { mode: "idle" } });
           return;
         }
 
-        // 2. 禁止重复连线 (A -> B 如果已经存在，就不再连)
         const exists = edges.some(edge => 
           edge.from.nodeId === fromNodeId && edge.to.nodeId === toNodeId
         );
         if (exists) {
-           console.warn("Edge already exists");
            set({ connectState: { mode: "idle" } });
            return;
         }
 
-        // 3. 业务逻辑校验：Start 不能做 Target，End 不能做 Source
         const fromNode = nodes.find(n => n.id === fromNodeId);
         const toNode = nodes.find(n => n.id === toNodeId);
 
         if (fromNode?.type === 'end') {
-          console.warn("End node cannot be a source");
           set({ connectState: { mode: "idle" } });
           return;
         }
 
         if (toNode?.type === 'start') {
-          console.warn("Start node cannot be a target");
           set({ connectState: { mode: "idle" } });
           return;
         }
@@ -233,6 +267,7 @@ export const useFlowStore = create<FlowStore>()(
           edges: [...state.edges, newEdge],
           connectState: { mode: "idle" },
           selectedNodeId: null,
+          selectedEdgeId: null,
         }));
       },
 
@@ -276,6 +311,7 @@ export const useFlowStore = create<FlowStore>()(
           nodes: [],
           edges: [],
           selectedNodeId: null,
+          selectedEdgeId: null,
         });
       },
 
@@ -286,6 +322,7 @@ export const useFlowStore = create<FlowStore>()(
           nodes: flow.nodes,
           edges: flow.edges,
           selectedNodeId: null,
+          selectedEdgeId: null,
         });
       },
     }),

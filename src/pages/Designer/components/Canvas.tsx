@@ -8,22 +8,26 @@ const { Title, Text } = Typography;
 
 type Point = { x: number; y: number };
 
-// ⭐ 新增：定义主流平台的默认节点名称映射
 const NODE_NAME_MAP: Record<string, string> = {
   start: "发起人",
   approval: "审批人",
   end: "结束",
-  // 如果未来有抄送节点，可以加: cc: "抄送人"
 };
 
 const Canvas: React.FC = () => {
   const nodes = useFlowStore((s) => s.nodes);
   const addNode = useFlowStore((s) => s.addNode);
   const setSelectedNodeId = useFlowStore((s) => s.setSelectedNodeId);
+  const setSelectedEdgeId = useFlowStore((s) => s.setSelectedEdgeId);
   const setCanvasSize = useFlowStore((s) => s.setCanvasSize);
   const viewportOffset = useFlowStore((s) => s.viewportOffset);
   const setViewportOffset = useFlowStore((s) => s.setViewportOffset);
   const deleteSelected = useFlowStore((s) => s.deleteSelected);
+  
+  // 🆕 连线相关 Hook
+  const updateConnectCursor = useFlowStore((s) => s.updateConnectCursor);
+  const cancelConnect = useFlowStore((s) => s.cancelConnect); // 获取取消方法
+  const connectState = useFlowStore((s) => s.connectState);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const isSpaceDownRef = useRef(false);
@@ -50,10 +54,21 @@ const Canvas: React.FC = () => {
       const target = e.target as HTMLElement;
       const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
       
+      // Delete 删除
       if (!isInput && (e.key === "Delete" || e.key === "Backspace")) {
         deleteSelected();
       }
 
+      // 🆕 ESC 取消连线
+      if (e.key === "Escape") {
+        if (connectState.mode === "connecting") {
+          cancelConnect();
+        }
+        setSelectedNodeId(null);
+        setSelectedEdgeId(null);
+      }
+
+      // Space 拖拽模式
       if (e.code === "Space") {
         if (!isSpaceDownRef.current) {
           isSpaceDownRef.current = true;
@@ -76,28 +91,40 @@ const Canvas: React.FC = () => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [deleteSelected]);
+  }, [deleteSelected, connectState.mode, cancelConnect]); // 依赖项更新
 
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
-      if (!isPanningRef.current) return;
-      setViewportOffset({
-        x: panStartOffsetRef.current.x + (e.clientX - panStartMouseRef.current.x),
-        y: panStartOffsetRef.current.y + (e.clientY - panStartMouseRef.current.y),
-      });
+      if (isPanningRef.current) {
+        setViewportOffset({
+          x: panStartOffsetRef.current.x + (e.clientX - panStartMouseRef.current.x),
+          y: panStartOffsetRef.current.y + (e.clientY - panStartMouseRef.current.y),
+        });
+        return;
+      }
+
+      // 更新连线光标位置
+      if (connectState.mode === "connecting" && canvasRef.current) {
+        const rect = canvasRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left - viewportOffset.x;
+        const y = e.clientY - rect.top - viewportOffset.y;
+        updateConnectCursor({ x, y });
+      }
     };
+
     const onMouseUp = () => {
       isPanningRef.current = false;
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     };
+
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
     return () => {
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
     };
-  }, [setViewportOffset]);
+  }, [setViewportOffset, viewportOffset, connectState.mode]);
 
   const tryStartPan = (e: React.MouseEvent<HTMLDivElement>) => {
     const isMiddle = e.button === 1;
@@ -121,7 +148,7 @@ const Canvas: React.FC = () => {
           流程设计画布
         </Title>
         <Text type="secondary" style={{ fontSize: 12 }}>
-          空格+左键 / 中键拖动画布，选中节点按 Delete 删除
+          空格+左键 / 中键拖动画布，选中按 Delete 删除，右键/ESC 取消连线
         </Text>
       </div>
 
@@ -135,21 +162,33 @@ const Canvas: React.FC = () => {
           const rect = e.currentTarget.getBoundingClientRect();
           const x = e.clientX - rect.left - viewportOffset.x;
           const y = e.clientY - rect.top - viewportOffset.y;
-          
-          // ⭐ 核心修改：使用映射表来设置默认名称
-          // 如果映射表中没有，就降级使用 type 原名
           const defaultName = NODE_NAME_MAP[type] || type;
 
           addNode({
             id: Date.now().toString(),
             type,
-            name: defaultName, // 这里不再是 name: type
+            name: defaultName, 
             position: { x, y },
           });
         }}
+        // 🆕 支持右键点击取消连线
+        onContextMenu={(e) => {
+           e.preventDefault();
+           if (connectState.mode === "connecting") {
+             cancelConnect();
+           }
+        }}
         onMouseDown={(e) => {
           if (tryStartPan(e)) return;
+          
+          // 🆕 核心逻辑：如果正在连线，点击空白处 = 取消
+          if (connectState.mode === "connecting") {
+             cancelConnect();
+             return;
+          }
+
           setSelectedNodeId(null);
+          setSelectedEdgeId(null);
         }}
         style={{
           flex: 1,
@@ -176,12 +215,18 @@ const Canvas: React.FC = () => {
             pointerEvents: "none",
           }}
         >
-          <EdgesLayer />
+          {/* 1️⃣ 底层：渲染已完成的连线 (在节点下方) */}
+          <EdgesLayer layer="bottom" />
+          
+          {/* 2️⃣ 中层：渲染节点 */}
           <div style={{ pointerEvents: "auto", width: "100%", height: "100%" }}>
             {nodes.map((node) => (
               <NodeItem key={node.id} node={node} />
             ))}
           </div>
+
+          {/* 3️⃣ 顶层：渲染正在拖拽的橡皮筋虚线 (在节点上方，防止遮挡) */}
+          <EdgesLayer layer="top" />
         </div>
       </div>
     </div>
