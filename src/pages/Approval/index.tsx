@@ -1,20 +1,22 @@
 import React, { useMemo } from "react";
-import { Table, Tag, Typography, Card, Button, message, Tooltip } from "antd";
+import { Table, Tag, Typography, Card, Button, message, Tooltip, Space } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { useNavigate } from "react-router-dom"; // 1. 引入路由跳转钩子
 import { useProcessInstanceStore, type ProcessInstance } from "../../store/processInstanceStore";
 
 const { Title, Text } = Typography;
 
 const Approval: React.FC = () => {
-  // 1. 订阅 Store 数据
-  // 只要 store.instances 发生变化（比如某个实例状态变了），组件就会自动重新渲染
+  const navigate = useNavigate(); // 2. 初始化跳转函数
+
+  // 订阅 Store 数据
   const instancesMap = useProcessInstanceStore((s) => s.instances);
   const approve = useProcessInstanceStore((s) => s.approve);
 
-  // 2. 数据转换
+  // 数据转换
   const instanceList = useMemo(() => Object.values(instancesMap), [instancesMap]);
 
-  // 3. 定义表格列
+  // 定义表格列
   const columns: ColumnsType<ProcessInstance> = [
     {
       title: "实例 ID",
@@ -33,7 +35,6 @@ const Approval: React.FC = () => {
       dataIndex: "currentNodeId",
       key: "currentNodeId",
       render: (text, record) => {
-        // 如果流程结束，就不显示当前节点了，显示一个横杠
         if (record.status !== "running") return <span style={{ color: "#ccc" }}>-</span>;
         return <Tag>{text}</Tag>;
       },
@@ -43,21 +44,20 @@ const Approval: React.FC = () => {
       dataIndex: "status",
       key: "status",
       render: (status: string) => {
-        // 目标 1: 根据状态显示不同颜色的标签
         let color = "default";
         let label = "未知";
 
         switch (status) {
           case "running":
-            color = "processing"; // 蓝色动态
+            color = "processing";
             label = "进行中";
             break;
           case "approved":
-            color = "success";    // 绿色
+            color = "success";
             label = "已通过";
             break;
           case "rejected":
-            color = "error";      // 红色
+            color = "error";
             label = "已拒绝";
             break;
         }
@@ -76,25 +76,35 @@ const Approval: React.FC = () => {
       title: "操作",
       key: "action",
       render: (_, record) => {
-        // 目标 2: 状态检查逻辑
         const isRunning = record.status === "running";
         const isFinished = record.status === "approved";
 
         return (
-          <Tooltip title={!isRunning ? "流程已结束，无法操作" : "点击推进流程"}>
-            <Button
-              type={isRunning ? "primary" : "default"}
+          <Space>
+            {/* 🆕 新增：查看详情按钮 */}
+            <Button 
+              type="link" 
               size="small"
-              // 关键：状态不是 running 时禁用按钮
-              disabled={!isRunning}
-              onClick={() => {
-                approve(record.instanceId);
-                message.success("操作成功：流程已推进");
-              }}
+              onClick={() => navigate(`/approval/${record.instanceId}`)}
             >
-              {isFinished ? "已完成" : "同意"}
+              详情
             </Button>
-          </Tooltip>
+
+            {/* 原有功能：快速审批按钮 */}
+            <Tooltip title={!isRunning ? "流程已结束，无法操作" : "点击推进流程"}>
+              <Button
+                type={isRunning ? "primary" : "default"}
+                size="small"
+                disabled={!isRunning}
+                onClick={() => {
+                  approve(record.instanceId);
+                  message.success("操作成功：流程已推进");
+                }}
+              >
+                {isFinished ? "已完成" : "同意"}
+              </Button>
+            </Tooltip>
+          </Space>
         );
       },
     },
@@ -113,7 +123,7 @@ const Approval: React.FC = () => {
           columns={columns}
           rowKey="instanceId"
           pagination={false}
-          locale={{ emptyText: "暂无待办任务，请先去「设计器」发起流程" }}
+          locale={{ emptyText: "暂无待办任务，请先去「设计器」或「员工服务台」发起流程" }}
         />
       </Card>
     </div>
