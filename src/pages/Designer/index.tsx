@@ -1,6 +1,7 @@
 import React from "react";
-import { Button, message, Typography } from "antd";
-import { useNavigate } from "react-router-dom"; // 引入路由跳转
+import { Button, message, Typography, Space } from "antd";
+import { useNavigate } from "react-router-dom";
+import { RocketOutlined, SaveOutlined } from "@ant-design/icons"; // 引入图标
 import PropertiesPanel from "./components/PropertiesPanel";
 import NodePanel from "./components/NodePanel";
 import Canvas from "./components/Canvas";
@@ -13,43 +14,66 @@ const DesignerPage: React.FC = () => {
   const navigate = useNavigate();
   
   // 1. 获取 Store 方法
-  // getProcessDefinition: 用于提取当前画布上的 "蓝图"
-  // startProcess: 用于根据 "蓝图" 实例化一个任务
   const getProcessDefinition = useFlowStore((s) => s.getProcessDefinition);
+  const publishFlow = useFlowStore((s) => s.publishFlow); // 🆕 获取发布方法
   const startProcess = useProcessInstanceStore((s) => s.startProcess);
 
+  // 🆕 处理发布模板逻辑
+  const handlePublish = () => {
+    const definition = getProcessDefinition();
+    if (definition.nodes.length === 0) {
+      message.warning("画布为空，无法发布");
+      return;
+    }
+    
+    publishFlow(); // 调用 Store 的发布方法
+    message.success("✅ 模板发布成功！现在可以在“发起页”选择此流程了。");
+  };
+
+  // 处理直接运行逻辑 (调试用)
   const handleStartProcess = () => {
-    // 2. 获取当前流程定义（快照）
     const definition = getProcessDefinition();
 
-    // 简单的防御性编程
     if (definition.nodes.length === 0) {
       message.warning("画布为空，无法发起流程");
       return;
     }
 
-    // 3. 在实例 Store 中创建新实例
-    // 这会将当前的 nodes/edges 复制一份存入 instances 列表
+    // 直接实例化并跳转，跳过选模板步骤
     startProcess(definition);
-    
-    message.success("流程发起成功！正在跳转至审批中心...");
-
-    // 4. 跳转到审批页面查看结果
+    message.success("流程发起成功 (调试模式)！正在跳转至审批中心...");
     navigate("/approval");
   };
 
   return (
-    // 修改布局为 Flex Column，以便在顶部放置工具栏
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", padding: 16, background: "#f0f2f5" }}>
       
       {/* 顶部 Header 区域 */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <Title level={4} style={{ margin: 0 }}>EnterpriseFlow · 设计器</Title>
         
-        {/* 核心交互按钮 */}
-        <Button type="primary" size="large" onClick={handleStartProcess}>
-          🚀 发起流程 (Run)
-        </Button>
+        {/* 核心交互按钮区 */}
+        <Space>
+          {/* 🆕 发布按钮 */}
+          <Button 
+            type="dashed" 
+            size="large" 
+            icon={<SaveOutlined />} 
+            onClick={handlePublish}
+          >
+            💾 发布模板 (Publish)
+          </Button>
+
+          {/* 调试按钮 */}
+          <Button 
+            type="primary" 
+            size="large" 
+            icon={<RocketOutlined />} 
+            onClick={handleStartProcess}
+          >
+            🚀 直接测试 (Debug)
+          </Button>
+        </Space>
       </div>
 
       {/* 下方原有编辑器区域 (保持 Flex Row 布局) */}
@@ -57,19 +81,14 @@ const DesignerPage: React.FC = () => {
         style={{
           display: "flex",
           gap: 16,
-          flex: 1, // 自动撑满剩余高度
-          minHeight: 0, // 防止 flex 子项溢出问题
+          flex: 1, 
+          minHeight: 0, 
         }}
       >
-        {/* 左侧：节点面板 */}
         <NodePanel />
-
-        {/* 中间：画布区域 */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
           <Canvas />
         </div>
-
-        {/* 右侧：属性面板 */}
         <div style={{ width: 260 }}>
           <PropertiesPanel />
         </div>
