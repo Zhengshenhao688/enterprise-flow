@@ -42,11 +42,22 @@ export type Point = {
   y: number;
 };
 
+/**
+ * [Step 1 新增] 节点业务配置信息
+ * 用于存储节点的审批规则、扩展属性等
+ */
+export type NodeConfig = {
+  /** 指定该节点由哪个角色审批 (例如 "admin", "hr", "manager") */
+  approverRole?: string;
+};
+
 export type FlowNode = {
   id: string;
   type: string;
   name: string;
   position: { x: number; y: number };
+  /** [Step 1 新增] 节点的配置数据 (可选) */
+  config?: NodeConfig;
 };
 
 export type FlowEdge = {
