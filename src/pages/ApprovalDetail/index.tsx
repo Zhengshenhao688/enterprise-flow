@@ -1,179 +1,230 @@
 import React from "react";
 import { useParams, useNavigate } from "react-router-dom";
-// 🆕 1. 引入 Timeline 组件
-import { Card, Button, Descriptions, Tag, Typography, Empty, Space, message, Timeline } from "antd";
+import { 
+  Card, Typography, Button, Descriptions, Tag, Timeline, 
+  Space, Steps, Alert 
+} from "antd";
 import { 
   ArrowLeftOutlined, 
   CheckCircleOutlined, 
   CloseCircleOutlined, 
-  FileTextOutlined,
-  ClockCircleOutlined 
+  UserOutlined 
 } from "@ant-design/icons";
+
 import { useProcessInstanceStore } from "../../store/processInstanceStore";
+import { useAuthStore } from "../../store/useAuthStore";
 
-const { Title, Paragraph, Text } = Typography;
+const { Title, Text } = Typography;
 
-const ApprovalDetail: React.FC = () => {
-  const { instanceId } = useParams<{ instanceId: string }>();
+const ApprovalDetailPage: React.FC = () => {
+  const { instanceId } = useParams();
   const navigate = useNavigate();
-
+  
+  // 1. 获取当前用户 (用于权限判断)
+  const currentUserRole = useAuthStore((s) => s.role);
+  
+  // 2. 获取实例数据
   const instance = useProcessInstanceStore((s) => 
     instanceId ? s.instances[instanceId] : undefined
   );
+  
   const approve = useProcessInstanceStore((s) => s.approve);
-  // 🆕 2. 获取 reject 方法
   const reject = useProcessInstanceStore((s) => s.reject);
 
   if (!instance) {
     return (
       <div style={{ padding: 40, textAlign: "center" }}>
-        <Empty description="找不到该审批任务" />
-        <Button type="primary" onClick={() => navigate("/approval")} style={{ marginTop: 16 }}>返回列表</Button>
+        <Title level={4}>未找到该审批单</Title>
+        <Button onClick={() => navigate(-1)}>返回列表</Button>
       </div>
     );
   }
 
-  // 同意处理
-  const handleApprove = () => {
-    if (instanceId) {
-      approve(instanceId, "管理员"); // 这里可以传入当前登录用户名
-      message.success("审批已通过");
-      // 保持在当前页，让用户看到 timeline 变化，或者跳回列表均可
-      // navigate("/approval"); 
-    }
-  };
-
-  // 🆕 3. 拒绝处理
-  const handleReject = () => {
-    if (instanceId) {
-      reject(instanceId, "管理员");
-      message.error("审批已拒绝，流程终止");
-    }
-  };
-
-  const isRunning = instance.status === "running";
+  // ✅ 核心修复：安全提取 formData
+  // 如果 instance.formData 是 undefined，就给一个空对象 {}
+  // 这样下面的代码绝对不会报错
   const formData = instance.formData || {};
-  const formTitle = String(formData['title'] || '未填写');
-  const formReason = String(formData['reason'] || '未填写');
 
-  const renderStatusTag = (status: string) => {
-    const map: Record<string, { color: string; text: string }> = {
-      running: { color: "processing", text: "进行中" },
-      approved: { color: "success", text: "已通过" },
-      rejected: { color: "error", text: "已拒绝" },
-    };
-    const current = map[status] || { color: "default", text: status };
-    return <Tag color={current.color}>{current.text}</Tag>;
-  };
+  // =========================================================
+  // 🎨 可视化核心逻辑：构建 Steps 数据
+  // =========================================================
+  
+  const sortedNodes = [...instance.definitionSnapshot.nodes]
+    .filter(n => n.type === 'approval') 
+    .sort((a, b) => a.position.x - b.position.x);
+
+  const currentStepIndex = sortedNodes.findIndex(n => n.id === instance.currentNodeId);
+
+  const stepItems = [
+    { 
+      title: '发起申请', 
+      description: '已提交', 
+      status: 'finish' as const,
+      icon: <UserOutlined /> 
+    },
+    ...sortedNodes.map((node, index) => {
+      let status: 'wait' | 'process' | 'finish' | 'error' = 'wait';
+      
+      if (instance.status === 'approved') {
+        status = 'finish';
+      } else if (instance.status === 'rejected') {
+        if (index < currentStepIndex) status = 'finish';
+        else if (index === currentStepIndex) status = 'error'; 
+        else status = 'wait';
+      } else {
+        if (index < currentStepIndex) status = 'finish';
+        else if (index === currentStepIndex) status = 'process';
+        else status = 'wait';
+      }
+
+      const roleName = node.config?.approverRole || '任意人员';
+
+      return {
+        title: node.name,
+        description: `审核人: ${roleName}`,
+        status: status,
+      };
+    }),
+    { 
+      title: '流程结束', 
+      description: instance.status === 'approved' ? '已归档' : (instance.status === 'rejected' ? '已终止' : '等待结果'),
+      status: instance.status === 'approved' ? 'finish' as const : (instance.status === 'rejected' ? 'error' as const : 'wait' as const),
+    }
+  ];
+
+  // =========================================================
+  // 🔐 权限检查逻辑
+  // =========================================================
+  
+  const currentNode = instance.definitionSnapshot.nodes.find(n => n.id === instance.currentNodeId);
+  const requiredRole = currentNode?.config?.approverRole;
+  
+  const userRoleKey = currentUserRole?.trim().toLowerCase();
+  const requiredRoleKey = requiredRole?.trim().toLowerCase();
+  
+  const canOperate = 
+    instance.status === "running" && 
+    (userRoleKey === "admin" || (!requiredRoleKey) || userRoleKey === requiredRoleKey);
 
   return (
-    <div style={{ padding: 24, background: "#f0f2f5", minHeight: "100vh" }}>
-      {/* 顶部导航 */}
-      <Card bordered={false} style={{ marginBottom: 24 }}>
-        <Space align="center">
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate("/approval")} type="text" />
-          <div>
-            <Title level={4} style={{ margin: 0 }}>审批详情</Title>
-            <Text type="secondary" style={{ fontSize: 12 }}>单号: {instance.instanceId}</Text>
-          </div>
-        </Space>
-      </Card>
+    <div style={{ padding: 24, background: "#f5f5f5", minHeight: "100vh" }}>
+      {/* 顶部返回 */}
+      <Button 
+        icon={<ArrowLeftOutlined />} 
+        type="link" 
+        onClick={() => navigate(-1)} 
+        style={{ marginBottom: 16, paddingLeft: 0, fontSize: 16 }}
+      >
+        返回审批列表
+      </Button>
 
-      <div style={{ maxWidth: 800, margin: "0 auto" }}>
+      <Space direction="vertical" size="middle" style={{ width: "100%" }}>
         
-        {/* 区域 1: 基础信息 */}
-        <Card bordered={false} style={{ marginBottom: 24 }}>
-          <Descriptions title="流程信息" column={2}>
-            <Descriptions.Item label="流程名称"><strong>{instance.definitionSnapshot.name}</strong></Descriptions.Item>
-            <Descriptions.Item label="当前状态">{renderStatusTag(instance.status)}</Descriptions.Item>
-            <Descriptions.Item label="当前节点">
-              {isRunning ? <Tag color="blue">{instance.currentNodeId}</Tag> : "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="提交时间">
-              {new Date(instance.createdAt).toLocaleString()}
-            </Descriptions.Item>
-          </Descriptions>
+        {/* 1. 状态概览卡片 (含操作按钮) */}
+        <Card bordered={false}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              {/* ✅ 修复：使用安全的 formData */}
+              <Title level={4} style={{ marginTop: 0, marginBottom: 8 }}>
+                {(formData.title as string) || '无标题'}
+              </Title>
+              <Space>
+                <Tag color={instance.status === 'running' ? 'blue' : (instance.status === 'approved' ? 'green' : 'red')}>
+                  {instance.status === 'running' ? '审批中' : (instance.status === 'approved' ? '已通过' : '已驳回')}
+                </Tag>
+                <Text type="secondary">单号: {instance.instanceId}</Text>
+              </Space>
+            </div>
+            
+            {canOperate && (
+              <Space>
+                 <Button danger size="large" icon={<CloseCircleOutlined />} onClick={() => reject(instance.instanceId)}>
+                   拒绝
+                 </Button>
+                 <Button type="primary" size="large" icon={<CheckCircleOutlined />} onClick={() => approve(instance.instanceId, currentUserRole || 'Admin')}>
+                   通过
+                 </Button>
+              </Space>
+            )}
+          </div>
+
+          {!canOperate && instance.status === 'running' && (
+             <Alert 
+               message={`当前节点等待 [${requiredRole || '任意人员'} 审批]`} 
+               description={`您当前登录身份为 [${currentUserRole || '访客'}]，无权处理此任务。`}
+               type="warning" 
+               showIcon 
+               style={{ marginTop: 16 }}
+             />
+          )}
         </Card>
 
-        {/* 区域 2: 业务表单 */}
-        <Card title={<Space><FileTextOutlined /><span>申请内容</span></Space>} bordered={false} style={{ marginBottom: 24 }}>
-          <Descriptions column={1} bordered>
-            <Descriptions.Item label="申请标题">
-              <span style={{ fontSize: 16, fontWeight: 500 }}>{formTitle}</span>
-            </Descriptions.Item>
-            <Descriptions.Item label="申请事由 / 备注">
-              <span style={{ whiteSpace: "pre-wrap" }}>{formReason}</span>
-            </Descriptions.Item>
-          </Descriptions>
-        </Card>
-
-        {/* 🆕 区域 3: 审批记录 (Timeline) */}
-        <Card title={<Space><ClockCircleOutlined /><span>审批记录</span></Space>} bordered={false} style={{ marginBottom: 24 }}>
-          <div style={{ marginTop: 12 }}>
-            <Timeline 
-              items={instance.logs?.map(log => ({
-                color: log.action === 'reject' ? 'red' : log.action === 'approve' ? 'green' : 'blue',
-                children: (
-                  <>
-                    <Text strong>{log.operator}</Text> 
-                    <Text type="secondary" style={{ marginLeft: 8 }}>{new Date(log.date).toLocaleString()}</Text>
-                    <div style={{ marginTop: 4 }}>
-                      <Tag>{log.action === 'submit' ? '发起' : log.action === 'approve' ? '通过' : '拒绝'}</Tag>
-                      {log.comment}
-                    </div>
-                  </>
-                )
-              }))}
+        {/* 2. 流程可视化进度条 */}
+        <Card title="流程进度" bordered={false}>
+          <div style={{ padding: '20px 0' }}>
+            <Steps 
+              current={stepItems.findIndex(i => i.status === 'process')} 
+              items={stepItems} 
+              labelPlacement="vertical" 
             />
           </div>
         </Card>
 
-        {/* 区域 4: 操作区 */}
-        <Card title="审批处理" bordered={false} className="approval-action-card">
-          {isRunning ? (
-            <div style={{ textAlign: "center", padding: "20px 0" }}>
-              <div style={{ marginBottom: 24, color: "#666" }}>
-                <Paragraph>请仔细核对上述申请内容。点击操作后流程将自动流转。</Paragraph>
-              </div>
-              <Space size="large">
-                {/* 🆕 4. 绑定拒绝按钮 */}
-                <Button 
-                  danger 
-                  size="large" 
-                  icon={<CloseCircleOutlined />}
-                  onClick={handleReject}
-                >
-                  拒绝 / 驳回
-                </Button> 
+        {/* 3. 详情与日志 分栏布局 */}
+        <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+          
+          {/* 左侧：申请详情 */}
+          <div style={{ flex: 1, minWidth: 300 }}>
+            <Card title="申请详情" bordered={false} style={{ height: '100%' }}>
+              <Descriptions column={1} bordered size="middle">
+                <Descriptions.Item label="申请标题">
+                  {/* ✅ 修复：使用安全的 formData */}
+                  <Text strong>{(formData.title as string) || '-'}</Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="申请事由">
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{(formData.reason as string) || '-'}</span>
+                </Descriptions.Item>
+                <Descriptions.Item label="提交时间">
+                  {new Date(instance.createdAt).toLocaleString()}
+                </Descriptions.Item>
                 
-                <Button 
-                  type="primary" 
-                  size="large" 
-                  icon={<CheckCircleOutlined />} 
-                  onClick={handleApprove}
-                >
-                  同意申请
-                </Button>
-              </Space>
-            </div>
-          ) : (
-            <div style={{ textAlign: "center", padding: "30px 0", color: "#8c8c8c" }}>
-              {/* 根据状态显示不同图标 */}
-              {instance.status === 'approved' ? (
-                <CheckCircleOutlined style={{ fontSize: 32, color: "#52c41a", marginBottom: 12 }} />
-              ) : (
-                <CloseCircleOutlined style={{ fontSize: 32, color: "#ff4d4f", marginBottom: 12 }} />
-              )}
-              <Title level={5} style={{ color: instance.status === 'approved' ? "#52c41a" : "#ff4d4f" }}>
-                {instance.status === 'approved' ? "流程已通过" : "流程已被拒绝"}
-              </Title>
-              <p>该申请已结束，无法进行操作。</p>
-            </div>
-          )}
-        </Card>
-      </div>
+                {/* ✅ 修复：使用 Object.entries(formData) */}
+                {Object.entries(formData).map(([k, v]) => {
+                  if (k === 'title' || k === 'reason') return null;
+                  return <Descriptions.Item label={k} key={k}>{String(v)}</Descriptions.Item>;
+                })}
+              </Descriptions>
+            </Card>
+          </div>
+
+          {/* 右侧：审批动态 */}
+          <div style={{ width: 400, flexShrink: 0 }}>
+             <Card title="审批动态" bordered={false} style={{ height: '100%' }}>
+               <Timeline
+                 items={instance.logs.map(log => ({
+                   color: log.action === 'submit' ? 'blue' : (log.action === 'approve' ? 'green' : 'red'),
+                   children: (
+                     <>
+                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <Text strong>{log.operator}</Text> 
+                          <Tag>{log.action.toUpperCase()}</Tag>
+                       </div>
+                       <div style={{ marginTop: 4 }}>
+                         <Text type="secondary" style={{ fontSize: 12 }}>
+                           {new Date(log.date).toLocaleString()}
+                         </Text>
+                       </div>
+                     </>
+                   )
+                 }))}
+               />
+             </Card>
+          </div>
+        </div>
+
+      </Space>
     </div>
   );
 };
 
-export default ApprovalDetail;
+export default ApprovalDetailPage;
