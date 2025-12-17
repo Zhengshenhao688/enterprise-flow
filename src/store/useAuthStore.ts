@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
-type UserRole = 'admin' | 'user' | null;
+// 类型放宽，允许任意字符串作为角色
+type UserRole = 'admin' | string | null;
 
 interface AuthState {
   token: string | null;
@@ -17,17 +18,19 @@ export const useAuthStore = create<AuthState>()(
       role: null,
 
       login: (username, password) => {
-        // 模拟后端验证逻辑
-        if (username === 'admin' && password === '123456') {
-          set({ token: 'admin-token', role: 'admin' });
+        // 1. 密码校验
+        if (password === '123456') {
+          // 2. ⭐ 核心修复：标准化处理
+          // 输入 "Manager " -> 存为 "manager"
+          // 输入 "HR"       -> 存为 "hr"
+          const normalizedRole = username.trim().toLowerCase(); 
+          
+          set({ 
+            token: `mock-token-${normalizedRole}`, 
+            role: normalizedRole 
+          });
           return true;
         }
-
-        if (username === 'user' && password === '123456') {
-          set({ token: 'user-token', role: 'user' });
-          return true;
-        }
-
         return false;
       },
 
@@ -36,7 +39,7 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: 'enterprise-auth-storage', // 存储在 localStorage 的 key
+      name: 'enterprise-auth-storage',
       storage: createJSONStorage(() => localStorage),
     }
   )

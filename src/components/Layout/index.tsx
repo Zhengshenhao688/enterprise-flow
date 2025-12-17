@@ -31,18 +31,22 @@ const AppLayout: React.FC = () => {
     navigate('/login');
   };
 
+  // ✅ 核心修改：重新组织菜单结构
   const menuItems = [
+    // 1. 公共菜单：所有人可见
     {
       key: '/apply',
       icon: <FormOutlined />,
       label: '发起申请',
     },
+    {
+      key: '/approval',
+      icon: <AuditOutlined />,
+      label: '审批中心', // 👈 把它从 admin 判断里拿出来了
+    },
+
+    // 2. 管理员专属菜单
     ...(role === 'admin' ? [
-      {
-        key: '/approval',
-        icon: <AuditOutlined />,
-        label: '审批中心',
-      },
       {
         key: '/designer',
         icon: <AppstoreOutlined />,
@@ -58,29 +62,23 @@ const AppLayout: React.FC = () => {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      {/* ✅ 修改点 1: Sider 主题改为 'light'，并设置背景色为白色 
-        去掉了 breakpoint 和 collapsedWidth 以保持始终展开（根据需要可恢复）
-      */}
       <Sider theme="light" style={{ background: colorBgContainer, borderRight: '1px solid #f0f0f0' }}>
-        {/* Logo 区域标题颜色改为黑色 */}
         <div style={{ height: 64, margin: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Title level={5} style={{ color: '#000', margin: 0 }}> {/* 颜色改成黑色 */}
+          <Title level={5} style={{ color: '#000', margin: 0 }}>
             EnterpriseFlow
           </Title>
         </div>
-        {/* ✅ 修改点 2: Menu 主题改为 'light' */}
         <Menu
-          theme="light" // 主题改为 light
+          theme="light"
           mode="inline"
           selectedKeys={[location.pathname]}
           items={menuItems}
           onClick={(item) => navigate(item.key)}
-          style={{ borderRight: 0 }} // 去掉 Menu 自带的右边框，使用 Sider 的
+          style={{ borderRight: 0 }}
         />
       </Sider>
 
       <Layout>
-        {/* Header 保持不变，依然是白色背景 */}
         <Header style={{ padding: '0 24px', background: colorBgContainer, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f0f0f0' }}>
           <Text strong style={{ fontSize: 16 }}>
             工作台
@@ -91,14 +89,15 @@ const AppLayout: React.FC = () => {
               <Avatar icon={<UserOutlined />} style={{ backgroundColor: role === 'admin' ? '#1890ff' : '#87d068' }} />
               <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2' }}>
                 <Text style={{ fontSize: 12 }}>当前用户</Text>
+                {/* ✅ 优化显示：直接显示角色名，方便演示 */}
                 <Tag color={role === 'admin' ? 'blue' : 'green'} style={{ margin: 0, fontSize: 10, lineHeight: '16px', textAlign: 'center' }}>
-                  {role === 'admin' ? '管理员' : '普通员工'}
+                  {role === 'admin' ? '管理员' : (role || '普通员工').toUpperCase()}
                 </Tag>
               </div>
             </Space>
 
             <Button 
-              type="text" // 改为 text 类型，视觉更清爽
+              type="text"
               danger 
               icon={<LogoutOutlined />} 
               onClick={handleLogout}
