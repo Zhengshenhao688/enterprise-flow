@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
+// 1. 引入持久化中间件
+import { persist, createJSONStorage } from "zustand/middleware";
 
 // =======================================================
 // 工具函数 & 常量
@@ -53,10 +55,6 @@ export type FlowEdge = {
   to: { nodeId: string; anchor: AnchorType };
 };
 
-/**
- * 核心：流程模板定义结构
- * 这是「设计态」的最终产物，用于保存到数据库
- */
 export type ProcessDefinition = {
   id: string;
   name: string;
@@ -105,7 +103,6 @@ type FlowStore = {
   cancelConnect: () => void;
 
   // --- 数据导出 ---
-  /** 获取当前流程定义的快照（用于保存） */
   getProcessDefinition: () => ProcessDefinition;
 };
 
@@ -113,108 +110,119 @@ type FlowStore = {
 // Store 实现
 // =======================================================
 
-export const useFlowStore = create<FlowStore>((set, get) => ({
-  // 初始化元数据
-  processId: nanoid(),
-  processName: "未命名流程",
-  setProcessName: (name) => set({ processName: name }),
+export const useFlowStore = create<FlowStore>()(
+  persist(
+    (set, get) => ({
+      // 初始化元数据
+      processId: nanoid(),
+      processName: "未命名流程",
+      setProcessName: (name) => set({ processName: name }),
 
-  nodes: [],
-  edges: [],
-  canvasSize: { width: 0, height: 0 },
-  worldSize: { width: 0, height: 0 },
+      nodes: [],
+      edges: [],
+      canvasSize: { width: 0, height: 0 },
+      worldSize: { width: 0, height: 0 },
 
-  setCanvasSize: (size) =>
-    set(() => {
-      const MIN_WORLD_WIDTH = 2000;
-      const MIN_WORLD_HEIGHT = 1200;
-      return {
-        canvasSize: size,
-        worldSize: {
-          width: Math.max(size.width, MIN_WORLD_WIDTH),
-          height: Math.max(size.height, MIN_WORLD_HEIGHT),
-        },
-      };
-    }),
-
-  viewportOffset: { x: 0, y: 0 },
-  setViewportOffset: (offset) => set({ viewportOffset: offset }),
-  selectedNodeId: null,
-  setSelectedNodeId: (id) => set({ selectedNodeId: id }),
-
-  addNode: (node) =>
-    set((state) => ({
-      nodes: [...state.nodes, node],
-    })),
-
-  updateNode: (id, data) =>
-    set((state) => ({
-      nodes: state.nodes.map((n) => (n.id === id ? { ...n, ...data } : n)),
-    })),
-
-  updateNodePosition: (id, position) =>
-    set((state) => {
-      const { width, height } = state.worldSize;
-      return {
-        nodes: state.nodes.map((n) => {
-          if (n.id !== id) return n;
-          const x = clamp(position.x, 0, Math.max(0, width - NODE_WIDTH));
-          const y = clamp(position.y, 0, Math.max(0, height - NODE_HEIGHT));
-          return { ...n, position: { x, y } };
+      setCanvasSize: (size) =>
+        set(() => {
+          const MIN_WORLD_WIDTH = 2000;
+          const MIN_WORLD_HEIGHT = 1200;
+          return {
+            canvasSize: size,
+            worldSize: {
+              width: Math.max(size.width, MIN_WORLD_WIDTH),
+              height: Math.max(size.height, MIN_WORLD_HEIGHT),
+            },
+          };
         }),
-      };
-    }),
 
-  connectState: { mode: "idle" },
-
-  startConnect: (nodeId, anchor) => {
-    set({
-      connectState: {
-        mode: "connecting",
-        fromNodeId: nodeId,
-        fromAnchor: anchor,
-      },
-    });
-  },
-
-  finishConnect: (toNodeId, anchor) => {
-    const connectState = get().connectState;
-    if (connectState.mode !== "connecting") return;
-    
-    // 禁止自连
-    if (connectState.fromNodeId === toNodeId) {
-      set({ connectState: { mode: "idle" } });
-      return;
-    }
-
-    const newEdge: FlowEdge = {
-      id: nanoid(),
-      from: { nodeId: connectState.fromNodeId, anchor: connectState.fromAnchor },
-      to: { nodeId: toNodeId, anchor },
-    };
-
-    set((state) => ({
-      edges: [...state.edges, newEdge],
-      connectState: { mode: "idle" },
+      viewportOffset: { x: 0, y: 0 },
+      setViewportOffset: (offset) => set({ viewportOffset: offset }),
       selectedNodeId: null,
-    }));
-  },
+      setSelectedNodeId: (id) => set({ selectedNodeId: id }),
 
-  cancelConnect: () => {
-    set({ connectState: { mode: "idle" } });
-  },
+      addNode: (node) =>
+        set((state) => ({
+          nodes: [...state.nodes, node],
+        })),
 
-  // --- 核心方法实现 ---
-  getProcessDefinition: () => {
-    // 解构获取当前 Store 中的最新数据
-    const { processId, processName, nodes, edges } = get();
-    
-    // 组装并返回 ProcessDefinition 对象
-    return {
-      id: processId,
-      name: processName,
-      nodes,
-      edges,
-    };
-  },
-}));
+      updateNode: (id, data) =>
+        set((state) => ({
+          nodes: state.nodes.map((n) => (n.id === id ? { ...n, ...data } : n)),
+        })),
+
+      updateNodePosition: (id, position) =>
+        set((state) => {
+          const { width, height } = state.worldSize;
+          return {
+            nodes: state.nodes.map((n) => {
+              if (n.id !== id) return n;
+              const x = clamp(position.x, 0, Math.max(0, width - NODE_WIDTH));
+              const y = clamp(position.y, 0, Math.max(0, height - NODE_HEIGHT));
+              return { ...n, position: { x, y } };
+            }),
+          };
+        }),
+
+      connectState: { mode: "idle" },
+
+      startConnect: (nodeId, anchor) => {
+        set({
+          connectState: {
+            mode: "connecting",
+            fromNodeId: nodeId,
+            fromAnchor: anchor,
+          },
+        });
+      },
+
+      finishConnect: (toNodeId, anchor) => {
+        const connectState = get().connectState;
+        if (connectState.mode !== "connecting") return;
+        
+        // 禁止自连
+        if (connectState.fromNodeId === toNodeId) {
+          set({ connectState: { mode: "idle" } });
+          return;
+        }
+
+        const newEdge: FlowEdge = {
+          id: nanoid(),
+          from: { nodeId: connectState.fromNodeId, anchor: connectState.fromAnchor },
+          to: { nodeId: toNodeId, anchor },
+        };
+
+        set((state) => ({
+          edges: [...state.edges, newEdge],
+          connectState: { mode: "idle" },
+          selectedNodeId: null,
+        }));
+      },
+
+      cancelConnect: () => {
+        set({ connectState: { mode: "idle" } });
+      },
+
+      getProcessDefinition: () => {
+        const { processId, processName, nodes, edges } = get();
+        return {
+          id: processId,
+          name: processName,
+          nodes,
+          edges,
+        };
+      },
+    }),
+    {
+      name: "enterprise-flow-storage", // localStorage Key
+      storage: createJSONStorage(() => localStorage),
+      // 过滤不需要保存的临时状态（如拖拽中的连线状态、选中状态）
+      partialize: (state) => ({
+        processId: state.processId,
+        processName: state.processName,
+        nodes: state.nodes,
+        edges: state.edges,
+      }),
+    }
+  )
+);

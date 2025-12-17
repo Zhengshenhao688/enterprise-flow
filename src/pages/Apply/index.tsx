@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react"; // 1. 引入 useState
 import { Card, Typography, Layout, Button, Form, Input, message, Steps } from "antd";
 import { useNavigate } from "react-router-dom";
 import { useFlowStore } from "../../store/flowStore";
@@ -8,8 +8,8 @@ const { Title, Paragraph } = Typography;
 const { Content } = Layout;
 const { TextArea } = Input;
 
-// 定义表单数据类型
 interface ApplyFormData {
+  [key: string]: unknown;
   title: string;
   reason: string;
 }
@@ -17,37 +17,38 @@ interface ApplyFormData {
 const ApplyPage: React.FC = () => {
   const navigate = useNavigate();
   const [form] = Form.useForm();
+  
+  // 🆕 2. 添加 loading 状态
+  const [loading, setLoading] = useState(false);
 
-  // 1. 获取 Store 方法
-  // 注意：真实场景中，Apply页应该调用 API 获取“已发布”的流程，
-  // 这里为了演示闭环，我们直接从 flowStore (设计器) 获取当前的草稿
   const getProcessDefinition = useFlowStore((s) => s.getProcessDefinition);
   const startProcess = useProcessInstanceStore((s) => s.startProcess);
 
-  // 2. 提交处理逻辑
-  const onFinish = (values: ApplyFormData) => {
+  const onFinish = async (values: ApplyFormData) => { // 🆕 改为 async
     console.log("表单数据:", values);
-
-    // Step A: 获取流程模板
     const definition = getProcessDefinition();
 
-    // 简单校验：如果没有节点，说明管理员还没画图
     if (!definition || definition.nodes.length === 0) {
       message.error("当前没有可用的流程模板，请先去设计器绘制流程！");
       return;
     }
 
+    // 🆕 3. 开始 Loading
+    setLoading(true);
+
     try {
-      // Step B: 调用引擎，传入表单数据
-      const instanceId = startProcess(definition, values as unknown as Record<string, unknown>);
+      // 🆕 4. 模拟 1秒 的网络请求延迟
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
+      const instanceId = startProcess(definition, values);
       message.success(`申请已提交！实例ID: ${instanceId}`);
-
-      // Step C: 路由跳转到审批中心
       navigate("/approval");
     } catch (error) {
       message.error("流程发起失败");
       console.error(error);
+    } finally {
+      // 🆕 5. 结束 Loading
+      setLoading(false);
     }
   };
 
@@ -68,7 +69,6 @@ const ApplyPage: React.FC = () => {
         </div>
 
         <div style={{ display: "flex", gap: 24 }}>
-          {/* 左侧：业务表单 */}
           <div style={{ flex: 1 }}>
             <Card title="通用业务申请单" bordered={false}>
               <Form
@@ -77,7 +77,6 @@ const ApplyPage: React.FC = () => {
                 onFinish={onFinish}
                 initialValues={{ title: "", reason: "" }}
               >
-                {/* 表单字段 1 */}
                 <Form.Item
                   label="申请标题"
                   name="title"
@@ -86,7 +85,6 @@ const ApplyPage: React.FC = () => {
                   <Input placeholder="例如：采购办公用品 / 申请年假" size="large" />
                 </Form.Item>
 
-                {/* 表单字段 2 */}
                 <Form.Item
                   label="申请事由 / 备注"
                   name="reason"
@@ -96,7 +94,8 @@ const ApplyPage: React.FC = () => {
                 </Form.Item>
 
                 <Form.Item>
-                  <Button type="primary" htmlType="submit" size="large" block>
+                  {/* 🆕 6. 绑定 loading 状态 */}
+                  <Button type="primary" htmlType="submit" size="large" block loading={loading}>
                     🚀 立即提交申请
                   </Button>
                 </Form.Item>
@@ -104,7 +103,6 @@ const ApplyPage: React.FC = () => {
             </Card>
           </div>
 
-          {/* 右侧：辅助信息 */}
           <div style={{ width: 320 }}>
             <Card title="流程预览" bordered={false}>
               <Steps
