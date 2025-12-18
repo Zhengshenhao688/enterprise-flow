@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
-import { useFlowStore, getAnchorCoordinate, type FlowNode } from "../../../store/flowStore";
+import { useFlowStore, getAnchorCoordinate } from "../../../store/flowStore";
+import type{ FlowNode }from "../../../types/flow"
 
 // 🆕 新增 props 定义，区分渲染层级
 type EdgesLayerProps = {
