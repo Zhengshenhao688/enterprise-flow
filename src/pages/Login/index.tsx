@@ -72,6 +72,7 @@ export default function Login() {
             <Tag color="orange" style={{ cursor: 'pointer' }} onClick={() => quickFill('manager')}>经理 (Manager)</Tag>
             <Tag color="green" style={{ cursor: 'pointer' }} onClick={() => quickFill('hr')}>人事 (HR)</Tag>
             <Tag color="cyan" style={{ cursor: 'pointer' }} onClick={() => quickFill('finance')}>财务 (Finance)</Tag>
+            <Tag color="default" style={{ cursor: 'pointer' }} onClick={() => quickFill('user')}>普通用户 (User)</Tag>
           </div>
         </div>
       </Card>

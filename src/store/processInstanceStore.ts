@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { nanoid } from "nanoid";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { ProcessDefinition } from "../types/flow";
+import { useAuthStore } from "./useAuthStore";
+import type { UserRole } from "./useAuthStore";
 
 // =====================
 // 审批日志
@@ -30,6 +32,8 @@ export type ProcessInstance = {
   /** 设计器快照（锁定审批配置） */
   definitionSnapshot: ProcessDefinition;
 
+  /** ⭐ 流程发起人（角色 Key，如 user / admin） */
+  createdBy: UserRole;
   createdAt: number;
   formData?: Record<string, unknown>;
   logs: ApprovalLog[];
@@ -77,6 +81,9 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
       // 发起流程
       // =====================
       startProcess: (definition, formData = {}) => {
+        const currentUserRole =
+          useAuthStore.getState().role ?? "user";
+
         const startNode = definition.nodes.find((n) => n.type === "start");
         const instanceId = nanoid();
         const now = Date.now();
@@ -92,6 +99,7 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
           currentNodeId: firstNode ? firstNode.id : null,
           status: "running",
           pendingApprovers,
+          createdBy: currentUserRole,
           definitionSnapshot: definition,
           createdAt: now,
           formData,

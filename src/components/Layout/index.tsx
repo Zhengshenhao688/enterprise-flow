@@ -33,31 +33,51 @@ const AppLayout: React.FC = () => {
 
   // ✅ 核心修改：重新组织菜单结构
   const menuItems = [
-    // 1. 公共菜单：所有人可见
-    {
-      key: '/apply',
-      icon: <FormOutlined />,
-      label: '发起申请',
-    },
-    {
-      key: '/approval',
-      icon: <AuditOutlined />,
-      label: '审批中心', // 👈 把它从 admin 判断里拿出来了
-    },
+    // 1️⃣ user / admin：可以发起申请
+    ...(role === 'user' || role === 'admin'
+      ? [
+          {
+            key: '/apply',
+            icon: <FormOutlined />,
+            label: '发起申请',
+          },
+          {
+            key: '/my-applications',
+            icon: <UserOutlined />,
+            label: '我发起的申请',
+          },
+        ]
+      : []),
 
-    // 2. 管理员专属菜单
-    ...(role === 'admin' ? [
-      {
-        key: '/designer',
-        icon: <AppstoreOutlined />,
-        label: '流程设计器',
-      },
-      {
-        key: '/dashboard',
-        icon: <DashboardOutlined />,
-        label: '数据看板',
-      }
-    ] : [])
+    // 2️⃣ 审批角色 + admin：审批中心
+    ...(role === 'hr' ||
+    role === 'manager' ||
+    role === 'finance' ||
+    role === 'admin'
+      ? [
+          {
+            key: '/approval',
+            icon: <AuditOutlined />,
+            label: '审批中心',
+          },
+        ]
+      : []),
+
+    // 3️⃣ 管理员专属
+    ...(role === 'admin'
+      ? [
+          {
+            key: '/designer',
+            icon: <AppstoreOutlined />,
+            label: '流程设计器',
+          },
+          {
+            key: '/dashboard',
+            icon: <DashboardOutlined />,
+            label: '数据看板',
+          },
+        ]
+      : []),
   ];
 
   return (

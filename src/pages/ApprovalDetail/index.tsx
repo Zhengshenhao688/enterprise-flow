@@ -85,20 +85,26 @@ const ApprovalDetailPage: React.FC = () => {
   ];
 
   // =========================================================
-  // ⭐ 核心修复：完善权限判定逻辑 (Step 4)
+  // ⭐ 核心修复：完善权限判定逻辑 
   // =========================================================
   const currentNode = instance.definitionSnapshot.nodes.find(n => n.id === instance.currentNodeId);
+  
+  // 是否发起人
+  const isCreator = instance.createdBy === currentUserRole;
+  
+  // 当前节点要求的审批角色
   const requiredRole = currentNode?.config?.approverRole;
   
   // 统一转换对比 Key
   const userRoleKey = currentUserRole?.trim().toLowerCase();
   const requiredRoleKey = requiredRole?.trim().toLowerCase();
   
-  // 严格判定：只有角色完全相等，或者是 admin 才能操作
-  // 且流程状态必须是运行中
-  const canOperate = 
-    instance.status === "running" && 
-    (userRoleKey === "admin" || (requiredRoleKey && userRoleKey === requiredRoleKey));
+  // 是否当前审批人
+  const canApprove =
+    instance.status === "running" &&
+    !isCreator &&
+    (userRoleKey === "admin" ||
+      (requiredRoleKey && userRoleKey === requiredRoleKey));
 
   return (
     <div style={{ padding: 24, background: "#f5f5f5", minHeight: "100vh" }}>
@@ -119,7 +125,7 @@ const ApprovalDetailPage: React.FC = () => {
             </div>
             
             {/* 权限受控的操作按钮组 */}
-            {canOperate && (
+            {canApprove && (
               <Space size="middle">
                  <Button 
                    danger 
@@ -139,10 +145,19 @@ const ApprovalDetailPage: React.FC = () => {
                  </Button>
               </Space>
             )}
+
+            {isCreator && instance.status === "running" && (
+              <Alert
+                type="info"
+                showIcon
+                message="你是该流程的发起人，可查看流程进度，但不能参与审批。"
+                style={{ marginTop: 16 }}
+              />
+            )}
           </div>
           
           {/* 如果有权限但还在等待他人会签，可以增加提示 */}
-          {canOperate && currentNode?.config?.approvalMode === 'MATCH_ALL' && (
+          {canApprove && currentNode?.config?.approvalMode === 'MATCH_ALL' && (
             <Alert 
               message="当前为会签模式，需要所有指定人员通过后流程才会流转。" 
               type="info" 

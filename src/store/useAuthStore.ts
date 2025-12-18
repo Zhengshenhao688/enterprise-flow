@@ -5,11 +5,11 @@ import { persist, createJSONStorage } from 'zustand/middleware';
  * 用户角色类型
  * 放宽限制，允许从用户名动态推导角色字符串
  */
-type UserRole = 'admin' | string | null; 
+export type UserRole = 'admin' | string | null; 
 
 interface AuthState {
   token: string | null;
-  role: UserRole;
+  role: UserRole ;
   login: (username: string, password: string) => boolean;
   logout: () => void;
 } 
@@ -52,3 +52,4 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 );
+

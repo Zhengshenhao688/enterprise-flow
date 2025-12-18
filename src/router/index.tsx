@@ -7,6 +7,7 @@ import Dashboard from "../pages/Dashboard";
 import ProtectedRoute from "./ProtectedRoute";
 import ApplyPage from "../pages/Apply";
 import ApprovalDetailPage from "../pages/ApprovalDetail";
+import MyApplications from "../pages/MyApplications";
 
 const router = createBrowserRouter([
   {
@@ -50,16 +51,14 @@ const router = createBrowserRouter([
         path: "approval", 
         element: (
           <ProtectedRoute> 
-            {/* 移除了 allowedRoles={['admin']} */}
             <Approval />
           </ProtectedRoute>
         ) 
       },
       { 
-        path: "approval/:instanceId", 
+        path: '/approval-detail/:instanceId', 
         element: (
           <ProtectedRoute>
-             {/* 移除了 allowedRoles={['admin']} */}
             <ApprovalDetailPage />
           </ProtectedRoute>
         ) 
@@ -67,6 +66,16 @@ const router = createBrowserRouter([
 
       // 🌍 3. 所有人可访问 (发起页)
       { path: "apply", element: <ApplyPage /> },
+
+      // 🌍 4. 我发起的申请（user / admin 使用，菜单层已控制角色）
+      {
+        path: "my-applications",
+        element: (
+          <ProtectedRoute>
+            <MyApplications />
+          </ProtectedRoute>
+        ),
+      },
     ],
   },
 ]);
