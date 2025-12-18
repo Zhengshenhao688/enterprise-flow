@@ -2,19 +2,23 @@ import React from "react";
 import { message, Tag } from "antd"; 
 import { UserOutlined, TeamOutlined } from "@ant-design/icons";
 import { useFlowStore, NODE_WIDTH, NODE_HEIGHT } from "../../../store/flowStore";
-import type { FlowNode, AnchorType } from "../../../types/flow"; // ✅ 修复：使用 import type
+import type { FlowNode, AnchorType } from "../../../types/flow";
 import "./nodeItem.css";
 
 type NodeItemProps = { node: FlowNode; };
 const allAnchors: AnchorType[] = ["top", "right", "bottom", "left"];
 
 const NodeItem: React.FC<NodeItemProps> = ({ node }) => {
-  const { selectedNodeId, setSelectedNodeId, updateNodePosition, connectState, startConnect, finishConnect } = useFlowStore();
+  const { 
+    selectedNodeId, setSelectedNodeId, updateNodePosition, 
+    connectState, startConnect, finishConnect 
+  } = useFlowStore();
   const isSelected = selectedNodeId === node.id;
 
-  // ✅ 修复：将三元表达式改为 if-else 语句，符合 ESLint 规则
+  // ✅ 核心修复：改写 if-else 消除 no-unused-expressions 报错 
   const handleAnchorMouseDown = (e: React.MouseEvent, anchor: AnchorType) => {
-    e.stopPropagation(); e.preventDefault();
+    e.stopPropagation();
+    e.preventDefault();
     const isOutputAnchor = anchor === "right" || anchor === "bottom";
     const isInputAnchor = anchor === "top" || anchor === "left";
 
@@ -33,24 +37,34 @@ const NodeItem: React.FC<NodeItemProps> = ({ node }) => {
     }
   };
 
-  // 鼠标拖拽逻辑保持不变...
   const handleMouseDown = (e: React.MouseEvent) => {
-    e.stopPropagation(); if (e.button !== 0 || connectState.mode === "connecting") return;
+    e.stopPropagation();
+    if (e.button !== 0 || connectState.mode === "connecting") return;
     setSelectedNodeId(node.id);
     const startX = e.clientX, startY = e.clientY, startPos = { ...node.position };
-    const onMouseMove = (m: MouseEvent) => updateNodePosition(node.id, { x: startPos.x + (m.clientX - startX), y: startPos.y + (m.clientY - startY) });
-    const onMouseUp = () => { window.removeEventListener("mousemove", onMouseMove); window.removeEventListener("mouseup", onMouseUp); };
-    window.addEventListener("mousemove", onMouseMove); window.addEventListener("mouseup", onMouseUp);
+    const onMouseMove = (m: MouseEvent) => {
+      updateNodePosition(node.id, { 
+        x: startPos.x + (m.clientX - startX), 
+        y: startPos.y + (m.clientY - startY) 
+      });
+    };
+    const onMouseUp = () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
   };
 
   return (
-    <div className={`ef-node ${isSelected ? "is-selected" : ""}`}
+    <div 
+      className={`ef-node ${isSelected ? "is-selected" : ""}`}
       style={{ left: node.position.x, top: node.position.y, width: NODE_WIDTH, height: NODE_HEIGHT }}
       onMouseDown={handleMouseDown}
     >
       <div className="ef-node-label">{node.name}</div>
 
-      {/* ✅ 修复：移除 Tag 不存在的 size 属性，根据模式显示标签 */}
+      {/* ✅ 核心修复：移除不存在的 size 属性  */}
       {node.type === 'approval' && (
         <div style={{ marginTop: 4, display: 'flex', justifyContent: 'center' }}>
           {node.config?.approvalMode === 'MATCH_ALL' ? (
@@ -62,7 +76,11 @@ const NodeItem: React.FC<NodeItemProps> = ({ node }) => {
       )}
 
       {allAnchors.map((anchor) => (
-        <div key={anchor} className={`ef-anchor ${anchor}`} onMouseDown={(e) => handleAnchorMouseDown(e, anchor as AnchorType)} />
+        <div 
+          key={anchor} 
+          className={`ef-anchor ${anchor}`} 
+          onMouseDown={(e) => handleAnchorMouseDown(e, anchor as AnchorType)} 
+        />
       ))}
     </div>
   );

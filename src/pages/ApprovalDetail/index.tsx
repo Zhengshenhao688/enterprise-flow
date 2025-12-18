@@ -1,7 +1,16 @@
 import React from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Card, Typography, Button, Descriptions, Tag, Timeline, Space, Steps } from "antd";
-import { ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined, UserOutlined } from "@ant-design/icons";
+import { 
+  Card, Typography, Button, Descriptions, Tag, Timeline, 
+  Space, Steps, Alert 
+} from "antd";
+import { 
+  ArrowLeftOutlined, 
+  CheckCircleOutlined, 
+  CloseCircleOutlined, 
+  UserOutlined 
+} from "@ant-design/icons";
+
 import { useProcessInstanceStore } from "../../store/processInstanceStore";
 import { useAuthStore } from "../../store/useAuthStore";
 
@@ -10,17 +19,31 @@ const { Title, Text } = Typography;
 const ApprovalDetailPage: React.FC = () => {
   const { instanceId } = useParams();
   const navigate = useNavigate();
+  
+  // 1. 获取当前用户角色 (用于权限判定)
   const currentUserRole = useAuthStore((s) => s.role);
-  const instance = useProcessInstanceStore((s) => instanceId ? s.instances[instanceId] : undefined);
+  
+  // 2. 获取实例数据
+  const instance = useProcessInstanceStore((s) => 
+    instanceId ? s.instances[instanceId] : undefined
+  );
+  
   const approve = useProcessInstanceStore((s) => s.approve);
   const reject = useProcessInstanceStore((s) => s.reject);
 
-  if (!instance) return <div style={{ padding: 40, textAlign: "center" }}><Title level={4}>未找到审批单</Title><Button onClick={() => navigate(-1)}>返回</Button></div>;
+  if (!instance) {
+    return (
+      <div style={{ padding: 40, textAlign: "center" }}>
+        <Title level={4}>未找到审批单</Title>
+        <Button onClick={() => navigate(-1)}>返回</Button>
+      </div>
+    );
+  }
 
-  const formData = instance.formData || {}; // [cite: 190]
+  const formData = instance.formData || {};
 
   // =========================================================
-  // 🎨 可视化增强：构建支持进度展示的 Steps 数据
+  // 🎨 可视化增强：构建支持进度展示的 Steps 数据 (已完成步骤同步)
   // =========================================================
   const sortedNodes = [...instance.definitionSnapshot.nodes]
     .filter(n => n.type === 'approval') 
@@ -33,7 +56,6 @@ const ApprovalDetailPage: React.FC = () => {
     ...sortedNodes.map((node, index) => {
       let status: 'wait' | 'process' | 'finish' | 'error' = 'wait';
       
-      // 提取实时进度数据
       const processedCount = node.config?.processedUsers?.length || 0;
       const totalCount = node.config?.approverList?.length || 1;
       const isMatchAll = node.config?.approvalMode === 'MATCH_ALL';
@@ -46,7 +68,6 @@ const ApprovalDetailPage: React.FC = () => {
         status = index < currentStepIndex ? 'finish' : (index === currentStepIndex ? 'process' : 'wait');
       }
 
-      // ✅ 动态生成包含进度的描述文案
       let progressDesc = `审核人: ${node.config?.approverRole || '任意人员'}`;
       if (status === 'process') {
         progressDesc = `${isMatchAll ? '会签' : '或签'}进度: ${processedCount}/${totalCount} 人已通过`;
@@ -63,54 +84,128 @@ const ApprovalDetailPage: React.FC = () => {
     }
   ];
 
-  // 权限检查
+  // =========================================================
+  // ⭐ 核心修复：完善权限判定逻辑 (Step 4)
+  // =========================================================
   const currentNode = instance.definitionSnapshot.nodes.find(n => n.id === instance.currentNodeId);
   const requiredRole = currentNode?.config?.approverRole;
+  
+  // 统一转换对比 Key
   const userRoleKey = currentUserRole?.trim().toLowerCase();
   const requiredRoleKey = requiredRole?.trim().toLowerCase();
-  const canOperate = instance.status === "running" && (userRoleKey === "admin" || (!requiredRoleKey) || userRoleKey === requiredRoleKey);
+  
+  // 严格判定：只有角色完全相等，或者是 admin 才能操作
+  // 且流程状态必须是运行中
+  const canOperate = 
+    instance.status === "running" && 
+    (userRoleKey === "admin" || (requiredRoleKey && userRoleKey === requiredRoleKey));
 
   return (
     <div style={{ padding: 24, background: "#f5f5f5", minHeight: "100vh" }}>
       <Button icon={<ArrowLeftOutlined />} type="link" onClick={() => navigate(-1)} style={{ marginBottom: 16 }}>返回审批列表</Button>
+      
       <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+        {/* 顶部状态卡片 */}
         <Card bordered={false}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <Title level={4}>{(formData.title as string) || '无标题'}</Title>
+              <Title level={4} style={{ margin: '0 0 8px 0' }}>{(formData.title as string) || '无标题申请'}</Title>
               <Space>
                 <Tag color={instance.status === 'running' ? 'blue' : (instance.status === 'approved' ? 'green' : 'red')}>
                   {instance.status === 'running' ? '审批中' : (instance.status === 'approved' ? '已通过' : '已驳回')}
                 </Tag>
-                <Text type="secondary">单号: {instance.instanceId}</Text>
+                <Text type="secondary">申请单号: {instance.instanceId}</Text>
               </Space>
             </div>
+            
+            {/* 权限受控的操作按钮组 */}
             {canOperate && (
-              <Space>
-                 <Button danger size="large" icon={<CloseCircleOutlined />} onClick={() => reject(instance.instanceId, currentUserRole || 'Admin')}>拒绝</Button>
-                 <Button type="primary" size="large" icon={<CheckCircleOutlined />} onClick={() => approve(instance.instanceId, currentUserRole || 'Admin')}>通过</Button>
+              <Space size="middle">
+                 <Button 
+                   danger 
+                   size="large" 
+                   icon={<CloseCircleOutlined />} 
+                   onClick={() => reject(instance.instanceId, currentUserRole || 'Admin')}
+                 >
+                   拒绝
+                 </Button>
+                 <Button 
+                   type="primary" 
+                   size="large" 
+                   icon={<CheckCircleOutlined />} 
+                   onClick={() => approve(instance.instanceId, currentUserRole || 'Admin')}
+                 >
+                   通过审批
+                 </Button>
               </Space>
             )}
           </div>
+          
+          {/* 如果有权限但还在等待他人会签，可以增加提示 */}
+          {canOperate && currentNode?.config?.approvalMode === 'MATCH_ALL' && (
+            <Alert 
+              message="当前为会签模式，需要所有指定人员通过后流程才会流转。" 
+              type="info" 
+              showIcon 
+              style={{ marginTop: 16 }} 
+            />
+          )}
         </Card>
 
+        {/* 流程进度 Steps */}
         <Card title="流程进度" bordered={false}>
-          <Steps current={stepItems.findIndex(i => i.status === 'process')} items={stepItems} labelPlacement="vertical" />
+          <Steps 
+            current={stepItems.findIndex(i => i.status === 'process')} 
+            items={stepItems} 
+            labelPlacement="vertical" 
+          />
         </Card>
 
         <div style={{ display: "flex", gap: 24 }}>
-          <Card title="申请详情" bordered={false} style={{ flex: 1 }}>
+          {/* 左侧：表单详情 */}
+          <Card title="申请单详情" bordered={false} style={{ flex: 1 }}>
             <Descriptions column={1} bordered>
-              <Descriptions.Item label="申请标题"><Text strong>{(formData.title as string) || '-'}</Text></Descriptions.Item>
-              <Descriptions.Item label="申请事由">{(formData.reason as string) || '-'}</Descriptions.Item>
-              <Descriptions.Item label="提交时间">{new Date(instance.createdAt).toLocaleString()}</Descriptions.Item>
+              <Descriptions.Item label="申请标题">
+                <Text strong>{(formData.title as string) || '-'}</Text>
+              </Descriptions.Item>
+              <Descriptions.Item label="申请理由">
+                {(formData.reason as string) || '无'}
+              </Descriptions.Item>
+              {/* 动态渲染其他表单项 */}
+              {Object.entries(formData).map(([key, value]) => {
+                if (key === 'title' || key === 'reason') return null;
+                return (
+                  <Descriptions.Item label={key} key={key}>
+                    {String(value)}
+                  </Descriptions.Item>
+                );
+              })}
+              <Descriptions.Item label="提交时间">
+                {new Date(instance.createdAt).toLocaleString()}
+              </Descriptions.Item>
             </Descriptions>
           </Card>
-          <Card title="审批动态" bordered={false} style={{ width: 400 }}>
-            <Timeline items={instance.logs.map(log => ({
-              color: log.action === 'submit' ? 'blue' : (log.action === 'approve' ? 'green' : 'red'),
-              children: (<div><Text strong>{log.operator}</Text> <Tag>{log.action.toUpperCase()}</Tag><div>{new Date(log.date).toLocaleString()}</div></div>)
-            }))} />
+
+          {/* 右侧：审批日志 */}
+          <Card title="审批流转动态" bordered={false} style={{ width: 400, flexShrink: 0 }}>
+            <Timeline 
+              items={instance.logs.map(log => ({
+                color: log.action === 'submit' ? 'blue' : (log.action === 'approve' ? 'green' : 'red'),
+                children: (
+                  <div key={log.date}>
+                    <Space>
+                      <Text strong>{log.operator}</Text> 
+                      <Tag>{log.action.toUpperCase()}</Tag>
+                    </Space>
+                    <div style={{ marginTop: 4 }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {new Date(log.date).toLocaleString()}
+                      </Text>
+                    </div>
+                  </div>
+                )
+              }))} 
+            />
           </Card>
         </div>
       </Space>
