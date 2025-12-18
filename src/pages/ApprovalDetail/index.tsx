@@ -89,17 +89,13 @@ const ApprovalDetailPage: React.FC = () => {
   // =========================================================
   // ⭐ 核心修复：完善权限判定逻辑 
   // =========================================================
-  const currentNode = instance.definitionSnapshot.nodes.find(n => n.id === instance.currentNodeId);
   
   // 是否发起人
   const isCreator = instance.createdBy === currentUserRole;
   
-  // 当前节点要求的审批角色
-  const requiredRole = currentNode?.config?.approverRole;
   
   // 统一转换对比 Key
   const userRoleKey = currentUserRole?.trim().toLowerCase();
-  const requiredRoleKey = requiredRole?.trim().toLowerCase();
 
   const record = instance.approvalRecords?.[instance.currentNodeId || ""];
 
