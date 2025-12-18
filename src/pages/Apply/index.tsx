@@ -1,8 +1,21 @@
 import React, { useState } from "react";
-import { Card, Typography, Layout, Button, Form, Input, message, Steps, Select, Empty, Tag } from "antd";
+import {
+  Card,
+  Typography,
+  Layout,
+  Button,
+  Form,
+  Input,
+  message,
+  Steps,
+  Select,
+  Empty,
+  Tag,
+} from "antd";
 import { useNavigate } from "react-router-dom";
 import { useFlowStore } from "../../store/flowStore";
 import { useProcessInstanceStore } from "../../store/processInstanceStore";
+import { useAuthStore } from "../../store/useAuthStore";
 
 const { Title, Paragraph, Text } = Typography;
 const { Content } = Layout;
@@ -25,14 +38,16 @@ const ApplyPage: React.FC = () => {
 
   const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
 
+  const role = useAuthStore((s) => s.role) || "user";
+
   const onFinish = async (values: ApplyFormData) => {
     if (!selectedFlowId) {
       message.error("请先选择一个审批流程类型！");
       return;
     }
 
-    const targetFlow = publishedFlows.find(f => f.id === selectedFlowId);
-    
+    const targetFlow = publishedFlows.find((f) => f.id === selectedFlowId);
+
     if (!targetFlow) {
       message.error("未找到该流程模板，可能已被删除");
       return;
@@ -40,13 +55,18 @@ const ApplyPage: React.FC = () => {
 
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 800));
+      await new Promise((resolve) => setTimeout(resolve, 800));
 
       // 这里的 values 现在可以安全地传给 startProcess 了
       const instanceId = startProcess(targetFlow, values);
-      
+
       message.success(`申请提交成功！(单号: ${instanceId})`);
-      navigate("/approval");
+
+      if (role === "user" || role === "admin") {
+        navigate("/my-applications");
+      } else {
+        navigate("/approval");
+      }
     } catch (error) {
       message.error("流程发起失败");
       console.error(error);
@@ -55,33 +75,58 @@ const ApplyPage: React.FC = () => {
     }
   };
 
-  const selectedFlow = publishedFlows.find(f => f.id === selectedFlowId);
-  const previewSteps = selectedFlow 
+  const selectedFlow = publishedFlows.find((f) => f.id === selectedFlowId);
+  const previewSteps = selectedFlow
     ? [
-        { title: '发起申请', status: 'finish' as const },
+        { title: "发起申请", status: "finish" as const },
         ...selectedFlow.nodes
-          .filter(n => n.type === 'approval')
-          .map(n => ({ 
-            title: n.name, 
-            description: n.config?.approverRole ? `审核: ${n.config.approverRole}` : '审批节点' 
+          .filter((n) => n.type === "approval")
+          .map((n) => ({
+            title: n.name,
+            description: n.config?.approverRole
+              ? `审核: ${n.config.approverRole}`
+              : "审批节点",
           })),
-        { title: '流程结束', status: 'wait' as const }
+        { title: "流程结束", status: "wait" as const },
       ]
     : [
-        { title: '填写申请', description: '待开始' },
-        { title: '选择流程', description: '请先选择业务类型' },
-        { title: '审批结束', description: '...' },
+        { title: "填写申请", description: "待开始" },
+        { title: "选择流程", description: "请先选择业务类型" },
+        { title: "审批结束", description: "..." },
       ];
 
   return (
     <Layout style={{ minHeight: "100vh", background: "#f5f5f5" }}>
-      <div style={{ background: "#fff", padding: "0 24px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", height: 64, display: "flex", alignItems: "center" }}>
-          <Title level={4} style={{ margin: 0 }}>EnterpriseFlow · 员工服务台</Title>
+      <div
+        style={{
+          background: "#fff",
+          padding: "0 24px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 1200,
+            margin: "0 auto",
+            height: 64,
+            display: "flex",
+            alignItems: "center",
+          }}
+        >
+          <Title level={4} style={{ margin: 0 }}>
+            EnterpriseFlow · 员工服务台
+          </Title>
         </div>
       </div>
 
-      <Content style={{ maxWidth: 1200, margin: "24px auto", width: "100%", padding: "0 24px" }}>
+      <Content
+        style={{
+          maxWidth: 1200,
+          margin: "24px auto",
+          width: "100%",
+          padding: "0 24px",
+        }}
+      >
         <div style={{ marginBottom: 24 }}>
           <Title level={2}>员工发起申请</Title>
           <Paragraph type="secondary">
@@ -92,7 +137,7 @@ const ApplyPage: React.FC = () => {
         <div style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
           {/* 左侧：表单区 */}
           <div style={{ flex: 1 }}>
-            <Card title="业务申请单" bordered={false}>
+            <Card title="业务申请单"  variant="outlined">
               <Form
                 form={form}
                 layout="vertical"
@@ -104,15 +149,22 @@ const ApplyPage: React.FC = () => {
                   required
                   tooltip="请选择您要办理的业务类型，不同类型对应不同的审批人"
                 >
-                  <Select 
+                  <Select
                     size="large"
                     placeholder="请选择业务类型（如：请假、报销...）"
                     onChange={(val) => setSelectedFlowId(val)}
-                    notFoundContent={<Empty description="暂无已发布的流程，请联系管理员发布模板" />}
+                    notFoundContent={
+                      <Empty description="暂无已发布的流程，请联系管理员发布模板" />
+                    }
                   >
-                    {publishedFlows.map(flow => (
+                    {publishedFlows.map((flow) => (
                       <Select.Option key={flow.id} value={flow.id}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                          }}
+                        >
                           <span>{flow.name}</span>
                           <Tag>{flow.nodes.length} 个节点</Tag>
                         </div>
@@ -126,7 +178,10 @@ const ApplyPage: React.FC = () => {
                   name="title"
                   rules={[{ required: true, message: "请输入申请标题" }]}
                 >
-                  <Input placeholder="例如：采购办公用品 / 申请年假" size="large" />
+                  <Input
+                    placeholder="例如：采购办公用品 / 申请年假"
+                    size="large"
+                  />
                 </Form.Item>
 
                 <Form.Item
@@ -138,11 +193,11 @@ const ApplyPage: React.FC = () => {
                 </Form.Item>
 
                 <Form.Item>
-                  <Button 
-                    type="primary" 
-                    htmlType="submit" 
-                    size="large" 
-                    block 
+                  <Button
+                    type="primary"
+                    htmlType="submit"
+                    size="large"
+                    block
                     loading={loading}
                     disabled={!selectedFlowId}
                   >
@@ -155,23 +210,28 @@ const ApplyPage: React.FC = () => {
 
           {/* 右侧：动态预览区 */}
           <div style={{ width: 340 }}>
-            <Card title="审批流预览" bordered={false}>
+            <Card title="审批流预览" variant="outlined">
               {selectedFlowId ? (
                 <div>
-                   <div style={{ marginBottom: 16 }}>
-                     <Text type="secondary">即将发起的流程：</Text>
-                     <br/>
-                     <Text strong style={{ fontSize: 16 }}>{selectedFlow?.name}</Text>
-                   </div>
-                   <Steps
-                    direction="vertical"
+                  <div style={{ marginBottom: 16 }}>
+                    <Text type="secondary">即将发起的流程：</Text>
+                    <br />
+                    <Text strong style={{ fontSize: 16 }}>
+                      {selectedFlow?.name}
+                    </Text>
+                  </div>
+                  <Steps
+                    orientation="vertical"
                     size="small"
                     current={0}
                     items={previewSteps}
                   />
                 </div>
               ) : (
-                <Empty description="请先在左侧选择流程" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                <Empty
+                  description="请先在左侧选择流程"
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                />
               )}
             </Card>
           </div>

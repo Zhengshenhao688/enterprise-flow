@@ -58,7 +58,7 @@ const KpiCard = ({
   prefix: React.ReactNode;
   color: string;
 }) => (
-  <Card bordered={false}>
+  <Card variant="outlined">
     <Statistic
       title={<Text type="secondary">{title}</Text>}
       value={value}
@@ -176,7 +176,7 @@ const Dashboard: React.FC = () => {
   return (
     <div style={{ padding: 24, background: '#f5f7fa', minHeight: '100vh' }}>
       {/* Header */}
-      <Card bordered={false} style={{ marginBottom: 24 }}>
+      <Card variant="outlined" style={{ marginBottom: 24 }}>
         <Title level={4} style={{ marginBottom: 0 }}>
           数据可视化看板
         </Title>
@@ -225,7 +225,7 @@ const Dashboard: React.FC = () => {
       <Row gutter={24}>
         <Col span={10}>
           <Card
-            bordered={false}
+            variant="outlined"
             title="审批转化漏斗"
             extra={<Text type="secondary">流程从发起到完成</Text>}
             style={{ height: 520 }}
@@ -240,7 +240,7 @@ const Dashboard: React.FC = () => {
 
         <Col span={14}>
           <Card
-            bordered={false}
+            variant="outlined"
             title="申请提交时间分布"
             extra={<Text type="secondary">按星期 & 小时</Text>}
             style={{ height: 520 }}

@@ -110,9 +110,9 @@ const ApprovalDetailPage: React.FC = () => {
     <div style={{ padding: 24, background: "#f5f5f5", minHeight: "100vh" }}>
       <Button icon={<ArrowLeftOutlined />} type="link" onClick={() => navigate(-1)} style={{ marginBottom: 16 }}>返回审批列表</Button>
       
-      <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+      <Space orientation="vertical" size="middle" style={{ width: "100%" }}>
         {/* 顶部状态卡片 */}
-        <Card bordered={false}>
+        <Card variant="outlined">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <Title level={4} style={{ margin: '0 0 8px 0' }}>{(formData.title as string) || '无标题申请'}</Title>
@@ -168,17 +168,17 @@ const ApprovalDetailPage: React.FC = () => {
         </Card>
 
         {/* 流程进度 Steps */}
-        <Card title="流程进度" bordered={false}>
+        <Card title="流程进度" variant="outlined">
           <Steps 
             current={stepItems.findIndex(i => i.status === 'process')} 
             items={stepItems} 
-            labelPlacement="vertical" 
+            titlePlacement="vertical" 
           />
         </Card>
 
         <div style={{ display: "flex", gap: 24 }}>
           {/* 左侧：表单详情 */}
-          <Card title="申请单详情" bordered={false} style={{ flex: 1 }}>
+          <Card title="申请单详情" variant="outlined" style={{ flex: 1 }}>
             <Descriptions column={1} bordered>
               <Descriptions.Item label="申请标题">
                 <Text strong>{(formData.title as string) || '-'}</Text>
@@ -202,7 +202,7 @@ const ApprovalDetailPage: React.FC = () => {
           </Card>
 
           {/* 右侧：审批日志 */}
-          <Card title="审批流转动态" bordered={false} style={{ width: 400, flexShrink: 0 }}>
+          <Card title="审批流转动态" variant="outlined" style={{ width: 400, flexShrink: 0 }}>
             <Timeline 
               items={instance.logs.map(log => ({
                 color: log.action === 'submit' ? 'blue' : (log.action === 'approve' ? 'green' : 'red'),

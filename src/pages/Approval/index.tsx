@@ -103,7 +103,7 @@ const Approval: React.FC = () => {
         const role = node?.config?.approverRole;
 
         return (
-          <Space direction="vertical" size={0}>
+          <Space orientation="vertical" size={0}>
             <Tag color="blue">{node?.name || text}</Tag>
             {role && (
               <Text type="secondary" style={{ fontSize: 10 }}>
@@ -143,7 +143,7 @@ const Approval: React.FC = () => {
           <Button
             type="link"
             size="small"
-            onClick={() => navigate(`/approval/${record.instanceId}`)}
+            onClick={() => navigate(`/approval-detail/${record.instanceId}`)}
           >
             详情
           </Button>
@@ -184,7 +184,7 @@ const Approval: React.FC = () => {
 
   return (
     <div style={{ padding: 24 }}>
-      <Card bordered={false}>
+      <Card variant="outlined">
         <div
           style={{
             marginBottom: 24,

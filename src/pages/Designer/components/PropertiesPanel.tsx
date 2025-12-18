@@ -53,7 +53,7 @@ const PropertiesPanel: React.FC = () => {
                 config: { ...node.config, approvalMode: e.target.value as ApprovalMode } 
               })}
             >
-              <Space direction="vertical">
+              <Space orientation="vertical">
                 <Radio value="MATCH_ANY"><b>或签</b> (只需一人通过)</Radio>
                 <Radio value="MATCH_ALL"><b>会签</b> (需所有人通过)</Radio>
               </Space>
