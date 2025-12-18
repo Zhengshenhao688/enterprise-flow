@@ -55,14 +55,19 @@ const Approval: React.FC = () => {
         return;
       }
 
-      const pendingRoles = Array.isArray(instance.pendingApprovers)
-        ? instance.pendingApprovers.map((r) => r.toLowerCase())
-        : [];
+      const currentNodeId = instance.currentNodeId;
+      if (!currentNodeId) return;
 
-      const isAdmin = currentUserKey === "admin";
+      const record = instance.approvalRecords?.[currentNodeId];
+      if (!record) return;
 
-      // 2️⃣ 待办（唯一正确来源）
-      if (isAdmin || pendingRoles.includes(currentUserKey)) {
+      // ⭐ 真正的“是否还能审批”判断（会签 / 或签通用）
+      const canApprove =
+        record.assignees.includes(currentUserKey) &&
+        !record.approvedBy.includes(currentUserKey) &&
+        !record.rejectedBy.includes(currentUserKey);
+
+      if (canApprove) {
         pending.push(instance);
       }
     });

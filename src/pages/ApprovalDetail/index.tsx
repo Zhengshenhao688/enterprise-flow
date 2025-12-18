@@ -52,13 +52,15 @@ const ApprovalDetailPage: React.FC = () => {
   const currentStepIndex = sortedNodes.findIndex(n => n.id === instance.currentNodeId);
 
   const stepItems = [
-    { title: '发起申请', description: '已提交', status: 'finish' as const, icon: <UserOutlined /> },
+    { title: '发起申请', content: '已提交', status: 'finish' as const, icon: <UserOutlined /> },
     ...sortedNodes.map((node, index) => {
       let status: 'wait' | 'process' | 'finish' | 'error' = 'wait';
       
-      const processedCount = node.config?.processedUsers?.length || 0;
-      const totalCount = node.config?.approverList?.length || 1;
-      const isMatchAll = node.config?.approvalMode === 'MATCH_ALL';
+      const record = instance.approvalRecords?.[node.id];
+
+      const processedCount = record?.approvedBy.length || 0;
+      const totalCount = record?.assignees.length || 1;
+      const isMatchAll = record?.mode === 'MATCH_ALL';
       
       if (instance.status === 'approved') {
         status = 'finish';
@@ -98,13 +100,16 @@ const ApprovalDetailPage: React.FC = () => {
   // 统一转换对比 Key
   const userRoleKey = currentUserRole?.trim().toLowerCase();
   const requiredRoleKey = requiredRole?.trim().toLowerCase();
-  
-  // 是否当前审批人
+
+  const record = instance.approvalRecords?.[instance.currentNodeId || ""];
+
   const canApprove =
     instance.status === "running" &&
     !isCreator &&
-    (userRoleKey === "admin" ||
-      (requiredRoleKey && userRoleKey === requiredRoleKey));
+    record &&
+    record.assignees.includes(userRoleKey || "") &&
+    !record.approvedBy.includes(userRoleKey || "") &&
+    !record.rejectedBy.includes(userRoleKey || "");
 
   return (
     <div style={{ padding: 24, background: "#f5f5f5", minHeight: "100vh" }}>
@@ -157,7 +162,7 @@ const ApprovalDetailPage: React.FC = () => {
           </div>
           
           {/* 如果有权限但还在等待他人会签，可以增加提示 */}
-          {canApprove && currentNode?.config?.approvalMode === 'MATCH_ALL' && (
+          {canApprove && record?.mode === 'MATCH_ALL' && (
             <Alert 
               message="当前为会签模式，需要所有指定人员通过后流程才会流转。" 
               type="info" 
@@ -206,7 +211,7 @@ const ApprovalDetailPage: React.FC = () => {
             <Timeline 
               items={instance.logs.map(log => ({
                 color: log.action === 'submit' ? 'blue' : (log.action === 'approve' ? 'green' : 'red'),
-                children: (
+                content: (
                   <div key={log.date}>
                     <Space>
                       <Text strong>{log.operator}</Text> 

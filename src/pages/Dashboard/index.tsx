@@ -1,13 +1,16 @@
-import React, { useMemo } from 'react';
-import ReactECharts from 'echarts-for-react';
-import { Card, Col, Row, Statistic, Typography, Empty } from 'antd';
+import React, { useMemo } from "react";
+import ReactECharts from "echarts-for-react";
+import { Card, Col, Row, Statistic, Typography, Empty } from "antd";
 import {
   BarChartOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
-  StopOutlined
-} from '@ant-design/icons';
-import { useProcessInstanceStore, type ProcessInstance } from '../../store/processInstanceStore';
+  StopOutlined,
+} from "@ant-design/icons";
+import {
+  useProcessInstanceStore,
+  type ProcessInstance,
+} from "../../store/processInstanceStore";
 
 const { Title, Text } = Typography;
 
@@ -27,7 +30,7 @@ const calculateDuration = (instance: ProcessInstance) => {
 const aggregateHeatmapData = (instances: ProcessInstance[]) => {
   const grid = Array.from({ length: 7 }, () => Array(24).fill(0));
 
-  instances.forEach(ins => {
+  instances.forEach((ins) => {
     const d = new Date(ins.createdAt);
     grid[d.getDay()][d.getHours()] += 1;
   });
@@ -51,7 +54,7 @@ const KpiCard = ({
   title,
   value,
   prefix,
-  color
+  color,
 }: {
   title: string;
   value: string | number; // 🔴 改为 string | number (之前是 React.ReactNode)
@@ -62,10 +65,12 @@ const KpiCard = ({
     <Statistic
       title={<Text type="secondary">{title}</Text>}
       value={value}
-      valueStyle={{
-        fontSize: 28,
-        fontWeight: 600,
-        color
+      styles={{
+        content: {
+          fontSize: 28,
+          fontWeight: 600,
+          color,
+        },
       }}
       prefix={prefix}
     />
@@ -77,29 +82,32 @@ const KpiCard = ({
 ========================= */
 
 const Dashboard: React.FC = () => {
-  const instancesMap = useProcessInstanceStore(s => s.instances);
+  const instancesMap = useProcessInstanceStore((s) => s.instances);
 
   const { kpi, funnelData, heatmapData } = useMemo(() => {
     const all = Object.values(instancesMap);
     const total = all.length;
 
-    const approved = all.filter(i => i.status === 'approved').length;
-    const rejected = all.filter(i => i.status === 'rejected').length;
-    const running = all.filter(i => i.status === 'running').length;
+    const approved = all.filter((i) => i.status === "approved").length;
+    const rejected = all.filter((i) => i.status === "rejected").length;
+    const running = all.filter((i) => i.status === "running").length;
 
-    const finished = all.filter(i => i.status !== 'running');
+    const finished = all.filter((i) => i.status !== "running");
     const avgDuration = finished.length
-      ? (finished.reduce((s, i) => s + calculateDuration(i), 0) / finished.length).toFixed(1)
-      : '0';
+      ? (
+          finished.reduce((s, i) => s + calculateDuration(i), 0) /
+          finished.length
+        ).toFixed(1)
+      : "0";
 
     return {
       kpi: { total, approved, rejected, running, avgDuration },
       funnelData: [
-        { value: total, name: '发起申请' },
-        { value: total - rejected, name: '进入审批' },
-        { value: approved, name: '审批通过' }
+        { value: total, name: "发起申请" },
+        { value: total - rejected, name: "进入审批" },
+        { value: approved, name: "审批通过" },
       ],
-      heatmapData: aggregateHeatmapData(all)
+      heatmapData: aggregateHeatmapData(all),
     };
   }, [instancesMap]);
 
@@ -108,65 +116,87 @@ const Dashboard: React.FC = () => {
   ========================= */
 
   const funnelOption = {
-    tooltip: { trigger: 'item', formatter: '{b} : {c}' },
-    color: ['#5470c6', '#91cc75', '#fac858'],
+    tooltip: { trigger: "item", formatter: "{b} : {c}" },
+    color: ["#5470c6", "#91cc75", "#fac858"],
     series: [
       {
-        type: 'funnel',
-        left: '10%',
+        type: "funnel",
+        left: "10%",
         top: 20,
         bottom: 20,
-        width: '70%',
+        width: "70%",
         min: 0,
         max: kpi.total || 100,
-        sort: 'descending',
+        sort: "descending",
         gap: 4,
         label: {
           show: true,
-          position: 'right',
-          formatter: '{b}: {c}'
+          position: "right",
+          formatter: "{b}: {c}",
         },
         itemStyle: {
-          borderColor: '#fff',
-          borderWidth: 1
+          borderColor: "#fff",
+          borderWidth: 1,
         },
-        data: funnelData
-      }
-    ]
+        data: funnelData,
+      },
+    ],
   };
 
   const hours = [
-    '12a','1a','2a','3a','4a','5a','6a','7a','8a','9a','10a','11a',
-    '12p','1p','2p','3p','4p','5p','6p','7p','8p','9p','10p','11p'
+    "12a",
+    "1a",
+    "2a",
+    "3a",
+    "4a",
+    "5a",
+    "6a",
+    "7a",
+    "8a",
+    "9a",
+    "10a",
+    "11a",
+    "12p",
+    "1p",
+    "2p",
+    "3p",
+    "4p",
+    "5p",
+    "6p",
+    "7p",
+    "8p",
+    "9p",
+    "10p",
+    "11p",
   ];
-  const days = ['周日','周一','周二','周三','周四','周五','周六'];
+  const days = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
   const heatmapOption = {
-    tooltip: { position: 'top' },
-    grid: { height: '55%', top: '15%' },
-    xAxis: { type: 'category', data: hours, splitArea: { show: true } },
-    yAxis: { type: 'category', data: days, splitArea: { show: true } },
+    tooltip: { position: "top" },
+    grid: { height: "55%", top: "15%" },
+    xAxis: { type: "category", data: hours, splitArea: { show: true } },
+    yAxis: { type: "category", data: days, splitArea: { show: true } },
     visualMap: {
       min: 0,
       max: 5,
       calculable: true,
-      orient: 'horizontal',
-      left: 'center',
-      bottom: '10%'
+      orient: "horizontal",
+      left: "center",
+      bottom: "10%",
     },
     series: [
       {
-        type: 'heatmap',
+        type: "heatmap",
         data: heatmapData,
         label: { show: true },
         emphasis: {
           itemStyle: {
             shadowBlur: 10,
-            shadowColor: 'rgba(0,0,0,0.4)'
-          }
-        }
-      }
-    ]
+            shadowColor: "rgba(0,0,0,0.4)",
+          },
+        },
+      },
+    ],
   };
 
   /* =========================
@@ -174,15 +204,13 @@ const Dashboard: React.FC = () => {
   ========================= */
 
   return (
-    <div style={{ padding: 24, background: '#f5f7fa', minHeight: '100vh' }}>
+    <div style={{ padding: 24, background: "#f5f7fa", minHeight: "100vh" }}>
       {/* Header */}
       <Card variant="outlined" style={{ marginBottom: 24 }}>
         <Title level={4} style={{ marginBottom: 0 }}>
           数据可视化看板
         </Title>
-        <Text type="secondary">
-          基于流程实例的实时业务分析
-        </Text>
+        <Text type="secondary">基于流程实例的实时业务分析</Text>
       </Card>
 
       {/* KPI */}
@@ -206,7 +234,9 @@ const Dashboard: React.FC = () => {
         <Col span={6}>
           <KpiCard
             title="通过率"
-            value={`${kpi.total ? ((kpi.approved / kpi.total) * 100).toFixed(1) : 0}%`}
+            value={`${
+              kpi.total ? ((kpi.approved / kpi.total) * 100).toFixed(1) : 0
+            }%`}
             prefix={<CheckCircleOutlined />}
             color="#52c41a"
           />

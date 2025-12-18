@@ -49,7 +49,7 @@ const DesignerPage: React.FC = () => {
           <Select 
             placeholder="📂 打开已发布流程..."
             style={{ width: 220 }}
-            dropdownMatchSelectWidth={false}
+            popupMatchSelectWidth={false}
             onChange={(id) => {
               const target = publishedFlows.find(f => f.id === id);
               if (target) {

@@ -29,6 +29,16 @@ export type ProcessInstance = {
   /** ⭐ 当前节点待审批角色（运行时核心） */
   pendingApprovers: string[];
 
+  /** ⭐ 会签 / 或签运行态记录（关键） */
+  approvalRecords: {
+    [nodeId: string]: {
+      mode: "MATCH_ANY" | "MATCH_ALL";
+      assignees: string[];      // 这个节点需要审批的人
+      approvedBy: string[];     // 已通过的人
+      rejectedBy: string[];     // 已拒绝的人
+    };
+  };
+
   /** 设计器快照（锁定审批配置） */
   definitionSnapshot: ProcessDefinition;
 
@@ -90,15 +100,28 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
 
         // 从 start → 下一个节点
         const firstNode = getNextNode(definition, startNode?.id || null);
-
         const pendingApprovers = getPendingApproversFromNode(firstNode);
+
+        const approvalRecords: ProcessInstance["approvalRecords"] = {};
+
+        if (firstNode && firstNode.type === "approval") {
+          approvalRecords[firstNode.id] = {
+            mode: firstNode.config.approvalMode,
+            assignees: pendingApprovers,
+            approvedBy: [],
+            rejectedBy: [],
+          };
+        }
 
         const instance: ProcessInstance = {
           instanceId,
           processDefinitionId: definition.id,
           currentNodeId: firstNode ? firstNode.id : null,
           status: "running",
+
           pendingApprovers,
+          approvalRecords,
+
           createdBy: currentUserRole,
           definitionSnapshot: definition,
           createdAt: now,
@@ -130,51 +153,65 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
           const instance = state.instances[instanceId];
           if (!instance || instance.status !== "running") return state;
 
-          const { currentNodeId, definitionSnapshot } = instance;
-          const currentNode = definitionSnapshot.nodes.find((n) => n.id === currentNodeId);
-          if (!currentNode) return state;
+          const { currentNodeId, definitionSnapshot, approvalRecords } = instance;
+          if (!currentNodeId) return state;
 
-          // 非审批节点不处理
-          if (currentNode.type !== "approval") return state;
-
-          const { approvalMode, approverList } = currentNode.config;
-          const processedUsers = currentNode.config.processedUsers || [];
-
-          if (processedUsers.includes(operator)) return state;
-
-          const updatedProcessedUsers = [...processedUsers, operator];
-
-          // 更新 snapshot 中的 processedUsers
-          const updatedNodes = definitionSnapshot.nodes.map((n) =>
-            n.id === currentNodeId
-              ? { ...n, config: { ...n.config, processedUsers: updatedProcessedUsers } }
-              : n
+          const currentNode = definitionSnapshot.nodes.find(
+            (n) => n.id === currentNodeId
           );
+          if (!currentNode || currentNode.type !== "approval") return state;
 
-          const updatedSnapshot: ProcessDefinition = {
-            ...definitionSnapshot,
-            nodes: updatedNodes,
+          // ⭐ 取运行态审批记录
+          const record = approvalRecords[currentNodeId];
+          if (!record) return state;
+
+          // 已审批过，直接忽略
+          if (record.approvedBy.includes(operator)) return state;
+
+          // === 写入审批结果 ===
+          const updatedRecord = {
+            ...record,
+            approvedBy: [...record.approvedBy, operator],
           };
 
+          // === 判断是否可以流转 ===
           let shouldMove = false;
 
-          if (approvalMode === "MATCH_ANY") {
+          if (updatedRecord.mode === "MATCH_ANY") {
             shouldMove = true;
-          } else if (approvalMode === "MATCH_ALL") {
-            shouldMove = updatedProcessedUsers.length >= (approverList?.length || 1);
           }
 
-          // ========= 流转 =========
+          if (updatedRecord.mode === "MATCH_ALL") {
+            shouldMove =
+              updatedRecord.approvedBy.length >= updatedRecord.assignees.length;
+          }
+
+          // === 更新 approvalRecords（无论是否流转）===
+          const updatedApprovalRecords = {
+            ...approvalRecords,
+            [currentNodeId]: updatedRecord,
+          };
+
+          // ========= 可以流转 =========
           if (shouldMove) {
-            const nextNode = getNextNode(updatedSnapshot, currentNodeId);
+            const nextNode = getNextNode(definitionSnapshot, currentNodeId);
 
             let newStatus: InstanceStatus = "running";
             let nextPendingApprovers: string[] = [];
+            const nextApprovalRecords = { ...updatedApprovalRecords };
 
             if (!nextNode || nextNode.type === "end") {
               newStatus = "approved";
-            } else {
-              nextPendingApprovers = getPendingApproversFromNode(nextNode);
+            } else if (nextNode.type === "approval") {
+              const nextAssignees = getPendingApproversFromNode(nextNode);
+              nextPendingApprovers = nextAssignees;
+
+              nextApprovalRecords[nextNode.id] = {
+                mode: nextNode.config.approvalMode,
+                assignees: nextAssignees,
+                approvedBy: [],
+                rejectedBy: [],
+              };
             }
 
             return {
@@ -185,7 +222,7 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
                   currentNodeId: nextNode ? nextNode.id : null,
                   status: newStatus,
                   pendingApprovers: nextPendingApprovers,
-                  definitionSnapshot: updatedSnapshot,
+                  approvalRecords: nextApprovalRecords,
                   logs: [
                     ...instance.logs,
                     {
@@ -203,21 +240,20 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
             };
           }
 
-          // ========= 未流转，仅记录会签进度 =========
+          // ========= 未满足会签条件，仅记录进度 =========
           return {
             instances: {
               ...state.instances,
               [instanceId]: {
                 ...instance,
-                definitionSnapshot: updatedSnapshot,
-                pendingApprovers: approverList || [],
+                approvalRecords: updatedApprovalRecords,
                 logs: [
                   ...instance.logs,
                   {
                     date: Date.now(),
                     action: "approve",
                     operator,
-                    comment: `已审批 (${updatedProcessedUsers.length}/${approverList?.length || 1})`,
+                    comment: `会签进行中 (${updatedRecord.approvedBy.length}/${updatedRecord.assignees.length})`,
                   },
                 ],
               },
