@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { nanoid } from "nanoid";
 import { persist, createJSONStorage } from "zustand/middleware";
 
+import type { FlowNode, FlowEdge, ProcessDefinition, AnchorType } from "../types/flow";
+
 // =======================================================
 // 工具函数 & 常量
 // =======================================================
@@ -30,37 +32,10 @@ export function getAnchorCoordinate(position: { x: number; y: number }, anchor: 
 }
 
 // =======================================================
-// 类型定义
+// 类型定义 (Store 专用状态类型)
 // =======================================================
 
-export type AnchorType = "top" | "right" | "bottom" | "left";
-
 export type Point = { x: number; y: number };
-
-export type NodeConfig = {
-  approverRole?: string;
-};
-
-export type FlowNode = {
-  id: string;
-  type: string;
-  name: string;
-  position: { x: number; y: number };
-  config?: NodeConfig;
-};
-
-export type FlowEdge = {
-  id: string;
-  from: { nodeId: string; anchor: AnchorType };
-  to: { nodeId: string; anchor: AnchorType };
-};
-
-export type ProcessDefinition = {
-  id: string;
-  name: string;
-  nodes: FlowNode[];
-  edges: FlowEdge[];
-};
 
 export type ConnectState =
   | { mode: "idle" }
@@ -70,8 +45,6 @@ export type ConnectState =
       fromAnchor: AnchorType;
       cursorPosition?: { x: number; y: number } 
     };
-
-// ================== Store 定义 ==================
 
 type FlowStore = {
   processId: string;
@@ -107,7 +80,6 @@ type FlowStore = {
 
   getProcessDefinition: () => ProcessDefinition;
 
-  // 🆕 校验函数
   validateFlow: () => { success: boolean; error?: string };
 
   publishedFlows: ProcessDefinition[];
@@ -150,10 +122,22 @@ export const useFlowStore = create<FlowStore>()(
       selectedEdgeId: null,
       setSelectedEdgeId: (id) => set({ selectedEdgeId: id, selectedNodeId: null }),
 
+      // ✅ 增强：addNode 现在会自动注入 Phase 1 所需的配置
       addNode: (node) =>
-        set((state) => ({
-          nodes: [...state.nodes, node],
-        })),
+        set((state) => {
+          const newNode: FlowNode = {
+            ...node,
+            config: {
+              approverRole: node.config?.approverRole || 'Admin',
+              approvalMode: 'MATCH_ANY', // 默认或签
+              approverList: [],          // 初始化审批人列表
+              processedUsers: [],        // 初始化已处理列表
+            }
+          };
+          return {
+            nodes: [...state.nodes, newNode],
+          };
+        }),
 
       updateNode: (id, data) =>
         set((state) => ({
@@ -283,19 +267,15 @@ export const useFlowStore = create<FlowStore>()(
         };
       },
 
-      // 🆕 核心算法：图逻辑校验
       validateFlow: () => {
         const { nodes, edges } = get();
 
-        // 1. 存在性检查
         const startNode = nodes.find(n => n.type === 'start');
         const endNode = nodes.find(n => n.type === 'end');
 
         if (!startNode) return { success: false, error: '缺少【发起人】节点' };
         if (!endNode) return { success: false, error: '缺少【结束】节点' };
 
-        // 2. 连通性检查 (BFS 算法)
-        // 构建邻接表
         const adj = new Map<string, string[]>();
         nodes.forEach(n => adj.set(n.id, []));
         edges.forEach(e => {
@@ -303,7 +283,6 @@ export const useFlowStore = create<FlowStore>()(
           if (list) list.push(e.to.nodeId);
         });
 
-        // 开始遍历
         const queue = [startNode.id];
         const visited = new Set<string>([startNode.id]);
         let reachedEnd = false;
@@ -326,7 +305,6 @@ export const useFlowStore = create<FlowStore>()(
           return { success: false, error: '❌ 流程断路：从【发起人】无法流转到【结束】节点，请检查连线。' };
         }
 
-        // 3. 孤儿节点与完整性检查
         for (const node of nodes) {
           const outEdges = edges.filter(e => e.from.nodeId === node.id);
           const inEdges = edges.filter(e => e.to.nodeId === node.id);
@@ -339,8 +317,6 @@ export const useFlowStore = create<FlowStore>()(
             if (inEdges.length === 0) return { success: false, error: `❌【${node.name}】缺少输入连线` };
             if (outEdges.length === 0) return { success: false, error: `❌【${node.name}】缺少输出连线（死胡同）` };
           }
-          
-          // end 节点前面 BFS 已经保证了可达性，所以隐含了 inEdges > 0
         }
 
         return { success: true };
@@ -399,4 +375,4 @@ export const useFlowStore = create<FlowStore>()(
       }),
     }
   )
-);
+); 

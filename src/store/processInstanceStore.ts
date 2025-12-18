@@ -1,14 +1,15 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { ProcessDefinition } from "./flowStore";
 
-// 🆕 1. 定义审批日志结构
+import type { ProcessDefinition } from "../types/flow";
+
+// 1. 定义审批日志结构
 export type ApprovalLog = {
   date: number;
   action: "submit" | "approve" | "reject";
-  operator: string; // 操作人 (例如: "张三", "管理员")
-  comment?: string; // 审批意见
+  operator: string; 
+  comment?: string; 
 };
 
 export type InstanceStatus = "running" | "approved" | "rejected";
@@ -18,10 +19,10 @@ export type ProcessInstance = {
   processDefinitionId: string;
   currentNodeId: string | null;
   status: InstanceStatus;
-  definitionSnapshot: ProcessDefinition;
+  // 此处的定义现在自动包含了 approvalMode 和 processedUsers
+  definitionSnapshot: ProcessDefinition; 
   createdAt: number;
   formData?: Record<string, unknown>;
-  // 🆕 2. 新增日志数组
   logs: ApprovalLog[];
 };
 
@@ -30,7 +31,6 @@ type ProcessInstanceStore = {
   startProcess: (definition: ProcessDefinition, formData?: Record<string, unknown>) => string;
   getInstanceById: (instanceId: string) => ProcessInstance | undefined;
   approve: (instanceId: string, operator?: string) => void;
-  // 🆕 3. 新增拒绝方法
   reject: (instanceId: string, operator?: string) => void;
 };
 
@@ -52,12 +52,11 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
           definitionSnapshot: definition,
           createdAt: now,
           formData: formData,
-          // 🆕 4. 初始化日志
           logs: [
             {
               date: now,
               action: "submit",
-              operator: "申请人", // 实际项目中应从 AuthStore 获取
+              operator: "申请人", 
               comment: "发起流程申请",
             },
           ],
@@ -92,7 +91,6 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
             newStatus = "approved";
           }
 
-          // 🆕 5. 记录通过日志
           const newLog: ApprovalLog = {
             date: Date.now(),
             action: "approve",
@@ -114,13 +112,11 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
         });
       },
 
-      // 🆕 6. 实现拒绝逻辑
       reject: (instanceId: string, operator = "管理员") => {
         set((state) => {
           const instance = state.instances[instanceId];
           if (!instance || instance.status !== "running") return state;
 
-          // 记录拒绝日志
           const newLog: ApprovalLog = {
             date: Date.now(),
             action: "reject",
@@ -133,8 +129,8 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
               ...state.instances,
               [instanceId]: {
                 ...instance,
-                status: "rejected", // 状态变为已拒绝
-                currentNodeId: null, // 流程结束，无当前节点
+                status: "rejected", 
+                currentNodeId: null, 
                 logs: [...instance.logs, newLog],
               },
             },
