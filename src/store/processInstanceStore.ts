@@ -20,7 +20,7 @@ export type ApprovalLog = {
 export type InstanceStatus = "running" | "approved" | "rejected";
 
 // =====================
-// 流程实例
+// 流程实例（运行态数据）
 // =====================
 export type ProcessInstance = {
   instanceId: string;
@@ -29,44 +29,57 @@ export type ProcessInstance = {
   currentNodeId: string | null;
   status: InstanceStatus;
 
-  /** ⭐ 当前节点待审批角色（运行时核心） */
+  /** 当前节点待审批角色（仅 UI 使用，后续可删除） */
   pendingApprovers: string[];
 
-  /** ⭐ 会签 / 或签运行态记录（关键） */
+  /** ⭐ task 级会签记录（方案二核心） */
   approvalRecords: {
     [nodeId: string]: {
       mode: "MATCH_ANY" | "MATCH_ALL";
-      assignees: string[]; // 这个节点需要审批的人
-      approvedBy: string[]; // 已通过的人
-      rejectedBy: string[]; // 已拒绝的人
+      taskIds: string[];
+      approvedTaskIds: string[];
+      rejectedTaskIds: string[];
     };
   };
 
-  /** 设计器快照（锁定审批配置） */
   definitionSnapshot: ProcessDefinition | null;
-
-  /** ⭐ 流程发起人（角色 Key，如 user / admin） */
   createdBy: UserRole;
   createdAt: number;
   formData?: Record<string, unknown>;
   logs: ApprovalLog[];
 };
 
+// =====================
+// Store 类型
+// =====================
 type ProcessInstanceStore = {
   instances: Record<string, ProcessInstance>;
+
   startProcess: (
     definition: ProcessDefinition,
     formData?: Record<string, unknown>
   ) => string;
+
   getInstanceById: (instanceId: string) => ProcessInstance | undefined;
+
   moveToNext: (instanceId: string, nextNodeId: string | null) => void;
+
+  /** ⚠️ 旧接口（Step 4 后会废弃） */
   approve: (instanceId: string, operator?: string) => void;
   reject: (instanceId: string, operator?: string) => void;
+
+  /** ⭐ Step 3 新接口：task 驱动流程（占位版） */
+  applyTaskAction: (params: {
+    taskId: string;
+    action: "approve" | "reject";
+    operator: string;
+  }) => void;
+
   createInstance: (
     definitionId: string,
     startNodeId: string
   ) => ProcessInstance;
-  /** 追加审批日志（用于委派等非流转行为） */
+
   appendLog: (instanceId: string, log: ApprovalLog) => void;
 };
 
@@ -85,17 +98,15 @@ function getPendingApproversFromNode(
 ): string[] {
   if (!node || node.type !== "approval") return [];
 
-  // ✅ 新定义态优先：多审批角色
   if (Array.isArray(node.config.approverRoles) && node.config.approverRoles.length > 0) {
     return node.config.approverRoles;
   }
 
-  // ✅ 旧流程兜底：单审批角色
   return node.config.approverRole ? [node.config.approverRole] : [];
 }
 
 // =====================
-// Store
+// Store 实现
 // =====================
 export const useProcessInstanceStore = create<ProcessInstanceStore>()(
   persist(
@@ -110,36 +121,29 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
           typeof formData.title === "string" && formData.title.trim()
             ? formData.title
             : definition.name;
-        const currentUserRole = useAuthStore.getState().role ?? "user";
 
+        const currentUserRole = useAuthStore.getState().role ?? "user";
         const startNode = definition.nodes.find((n) => n.type === "start");
         const instanceId = nanoid();
         const now = Date.now();
 
-        // 从 start → 下一个节点
         const firstNode = getNextNode(definition, startNode?.id || null);
         const pendingApprovers = getPendingApproversFromNode(firstNode);
-
-        // ⭐ 创建首批审批任务（流程启动即生成）
-        if (firstNode && firstNode.type === "approval") {
-          const taskStore = useTaskStore.getState();
-          pendingApprovers.forEach((role) => {
-            taskStore.createTask(
-              instanceId,
-              firstNode.id,
-              role as Role
-            );
-          });
-        }
 
         const approvalRecords: ProcessInstance["approvalRecords"] = {};
 
         if (firstNode && firstNode.type === "approval") {
+          const taskStore = useTaskStore.getState();
+
+          const tasks = pendingApprovers.map((role) =>
+            taskStore.createTask(instanceId, firstNode.id, role as Role)
+          );
+
           approvalRecords[firstNode.id] = {
             mode: firstNode.config.approvalMode,
-            assignees: pendingApprovers,
-            approvedBy: [],
-            rejectedBy: [],
+            taskIds: tasks.map((t) => t.id),
+            approvedTaskIds: [],
+            rejectedTaskIds: [],
           };
         }
 
@@ -149,10 +153,8 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
           processDefinitionId: definition.id,
           currentNodeId: firstNode ? firstNode.id : null,
           status: "running",
-
           pendingApprovers,
           approvalRecords,
-
           createdBy: currentUserRole,
           definitionSnapshot: definition,
           createdAt: now,
@@ -176,128 +178,165 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
 
       getInstanceById: (instanceId) => get().instances[instanceId],
 
-      moveToNext: (instanceId, nextNodeId) => {
+      // =====================
+      // Step 3：task 驱动（占位版）
+      // =====================
+      applyTaskAction: ({ taskId, action, operator }) => {
         set((state) => {
-          const instance = state.instances[instanceId];
+          const taskStore = useTaskStore.getState();
+
+          // 1️⃣ 找到 task
+          const task = taskStore.tasks.find((t) => t.id === taskId);
+          if (!task) return state;
+
+          const instance = state.instances[task.instanceId];
           if (!instance || instance.status !== "running") return state;
 
-          return {
-            instances: {
-              ...state.instances,
-              [instanceId]: {
-                ...instance,
-                currentNodeId: nextNodeId,
-                logs: [
-                  ...instance.logs,
-                  {
-                    date: Date.now(),
-                    action: "approve",
-                    operator: "system",
-                    comment: "推进到下一节点",
-                  },
-                ],
-              },
-            },
-          };
-        });
-      },
-
-      // =====================
-      // 审批通过
-      // =====================
-      approve: (instanceId, operator = "admin") => {
-        set((state) => {
-          const instance = state.instances[instanceId];
-          if (!instance || instance.status !== "running") return state;
-
-          const { currentNodeId, definitionSnapshot, approvalRecords } =
-            instance;
-          if (!currentNodeId) return state;
-
-          const currentNode = definitionSnapshot?.nodes.find(
-            (n) => n.id === currentNodeId
-          );
-          if (!currentNode || currentNode.type !== "approval") return state;
-
-          // ⭐ 取运行态审批记录
-          const record = approvalRecords[currentNodeId];
+          const nodeId = task.nodeId;
+          const record = instance.approvalRecords[nodeId];
           if (!record) return state;
 
-          // 已审批过，直接忽略
-          if (record.approvedBy.includes(operator)) return state;
+          // 2️⃣ 写入 task 级审批结果
+          const approvedTaskIds = [...record.approvedTaskIds];
+          const rejectedTaskIds = [...record.rejectedTaskIds];
 
-          // === 写入审批结果 ===
+          if (action === "approve") {
+            if (!approvedTaskIds.includes(taskId)) {
+              approvedTaskIds.push(taskId);
+            }
+          }
+
+          if (action === "reject") {
+            if (!rejectedTaskIds.includes(taskId)) {
+              rejectedTaskIds.push(taskId);
+            }
+          }
+
           const updatedRecord = {
             ...record,
-            approvedBy: [...record.approvedBy, operator],
+            approvedTaskIds,
+            rejectedTaskIds,
           };
 
-          // === 判断是否可以流转 ===
+          // 3️⃣ 判断是否满足会签推进条件
           let shouldMove = false;
+          let shouldReject = false;
 
-          if (updatedRecord.mode === "MATCH_ANY") {
-            shouldMove = true;
+          if (record.mode === "MATCH_ANY") {
+            if (approvedTaskIds.length >= 1) {
+              shouldMove = true;
+            }
           }
 
-          if (updatedRecord.mode === "MATCH_ALL") {
-            shouldMove =
-              updatedRecord.approvedBy.length >= updatedRecord.assignees.length;
+          if (record.mode === "MATCH_ALL") {
+            if (rejectedTaskIds.length > 0) {
+              shouldReject = true;
+            } else if (approvedTaskIds.length === record.taskIds.length) {
+              shouldMove = true;
+            }
           }
 
-          // === 更新 approvalRecords（无论是否流转）===
-          const updatedApprovalRecords = {
-            ...approvalRecords,
-            [currentNodeId]: updatedRecord,
+          // 4️⃣ 更新 approvalRecords
+          const nextApprovalRecords = {
+            ...instance.approvalRecords,
+            [nodeId]: updatedRecord,
           };
 
-          // ========= 可以流转 =========
+          // 5️⃣ 会签失败 → 整个流程 reject
+          if (shouldReject) {
+            // 关闭其余 task
+            const remainTaskIds = record.taskIds.filter(
+              (id) => id !== taskId
+            );
+            taskStore.cancelTasks(remainTaskIds, "会签失败，流程终止");
+
+            return {
+              instances: {
+                ...state.instances,
+                [instance.instanceId]: {
+                  ...instance,
+                  status: "rejected",
+                  currentNodeId: null,
+                  approvalRecords: nextApprovalRecords,
+                  logs: [
+                    ...instance.logs,
+                    {
+                      date: Date.now(),
+                      action: "reject",
+                      operator,
+                      comment: "会签节点被拒绝，流程终止",
+                    },
+                  ],
+                },
+              },
+            };
+          }
+
+          // 6️⃣ 会签通过 → 推进到下一个节点
           if (shouldMove) {
-            const nextNode = getNextNode(definitionSnapshot!, currentNodeId);
+            // 关闭其余未处理 task
+            const remainTaskIds = record.taskIds.filter(
+              (id) => !approvedTaskIds.includes(id)
+            );
+            taskStore.cancelTasks(remainTaskIds, "会签已完成，任务自动关闭");
+
+            const nextNode = instance.definitionSnapshot
+              ? (() => {
+                  const edge = instance.definitionSnapshot.edges.find(
+                    (e) => e.from.nodeId === nodeId
+                  );
+                  return edge
+                    ? instance.definitionSnapshot.nodes.find(
+                        (n) => n.id === edge.to.nodeId
+                      ) || null
+                    : null;
+                })()
+              : null;
 
             let newStatus: InstanceStatus = "running";
-            let nextPendingApprovers: string[] = [];
-            const nextApprovalRecords = { ...updatedApprovalRecords };
+            let nextNodeId: string | null = null;
+            let pendingApprovers: string[] = [];
+
+            const finalApprovalRecords = { ...nextApprovalRecords };
 
             if (!nextNode || nextNode.type === "end") {
               newStatus = "approved";
             } else if (nextNode.type === "approval") {
-              const taskStore = useTaskStore.getState();
+              const nextRoles =
+                Array.isArray(nextNode.config.approverRoles)
+                  ? nextNode.config.approverRoles
+                  : nextNode.config.approverRole
+                  ? [nextNode.config.approverRole]
+                  : [];
 
-              const nextAssignees = getPendingApproversFromNode(nextNode);
+              const tasks = nextRoles.map((role) =>
+                taskStore.createTask(
+                  instance.instanceId,
+                  nextNode.id,
+                  role as Role
+                )
+              );
 
-              nextAssignees.forEach((assigneeRole) => {
-                const exists = taskStore.tasks.some(
-                  (t) =>
-                    t.instanceId === instanceId &&
-                    t.nodeId === nextNode.id &&
-                    t.assigneeRole === (assigneeRole as Role) &&
-                    t.status === "pending"
-                );
+              pendingApprovers = nextRoles;
+              nextNodeId = nextNode.id;
 
-                if (!exists) {
-                  taskStore.createTask(instanceId, nextNode.id, assigneeRole as Role);
-                }
-              });
-
-              nextPendingApprovers = nextAssignees;
-
-              nextApprovalRecords[nextNode.id] = {
+              finalApprovalRecords[nextNode.id] = {
                 mode: nextNode.config.approvalMode,
-                assignees: nextAssignees,
-                approvedBy: [],
-                rejectedBy: [],
+                taskIds: tasks.map((t) => t.id),
+                approvedTaskIds: [],
+                rejectedTaskIds: [],
               };
             }
 
             return {
               instances: {
                 ...state.instances,
-                [instanceId]: {
+                [instance.instanceId]: {
                   ...instance,
-                  currentNodeId: nextNode ? nextNode.id : null,
                   status: newStatus,
-                  pendingApprovers: nextPendingApprovers,
-                  approvalRecords: nextApprovalRecords,
+                  currentNodeId: nextNodeId,
+                  pendingApprovers,
+                  approvalRecords: finalApprovalRecords,
                   logs: [
                     ...instance.logs,
                     {
@@ -306,8 +345,8 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
                       operator,
                       comment:
                         newStatus === "approved"
-                          ? "审批完成，流程结束"
-                          : "审批通过，流转至下一节点",
+                          ? "会签完成，流程结束"
+                          : "会签完成，流转到下一节点",
                     },
                   ],
                 },
@@ -315,20 +354,20 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
             };
           }
 
-          // ========= 未满足会签条件，仅记录进度 =========
+          // 7️⃣ 未达成条件，仅记录进度
           return {
             instances: {
               ...state.instances,
-              [instanceId]: {
+              [instance.instanceId]: {
                 ...instance,
-                approvalRecords: updatedApprovalRecords,
+                approvalRecords: nextApprovalRecords,
                 logs: [
                   ...instance.logs,
                   {
                     date: Date.now(),
-                    action: "approve",
+                    action,
                     operator,
-                    comment: `会签进行中 (${updatedRecord.approvedBy.length}/${updatedRecord.assignees.length})`,
+                    comment: `会签进行中 (${approvedTaskIds.length}/${record.taskIds.length})`,
                   },
                 ],
               },
@@ -338,8 +377,13 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
       },
 
       // =====================
-      // 追加日志（不影响流程）
+      // 旧逻辑（暂时保留）
       // =====================
+      approve: () => {},
+      reject: () => {},
+
+      moveToNext: () => {},
+
       appendLog: (instanceId, log) => {
         set((state) => {
           const instance = state.instances[instanceId];
@@ -357,62 +401,28 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
         });
       },
 
-      // =====================
-      // 审批拒绝
-      // =====================
-      reject: (instanceId, operator = "admin") => {
-        set((state) => {
-          const instance = state.instances[instanceId];
-          if (!instance || instance.status !== "running") return state;
-
-          return {
-            instances: {
-              ...state.instances,
-              [instanceId]: {
-                ...instance,
-                status: "rejected",
-                currentNodeId: null,
-                pendingApprovers: [],
-                logs: [
-                  ...instance.logs,
-                  {
-                    date: Date.now(),
-                    action: "reject",
-                    operator,
-                    comment: "审批拒绝，流程终止",
-                  },
-                ],
-              },
-            },
-          };
-        });
-      },
-
-      // ⚠️ createInstance 仅用于测试或兜底，不包含完整流程初始化逻辑
       createInstance: (definitionId: string, startNodeId: string) => {
         const instanceId = nanoid();
         const now = Date.now();
+
         const instance: ProcessInstance = {
           instanceId,
-
-          // ✅ 修复点：补齐 title，避免 TS 报错
           title: "未命名流程",
-
           processDefinitionId: definitionId,
           currentNodeId: startNodeId,
           status: "running",
-
           pendingApprovers: [],
           approvalRecords: {},
-
           definitionSnapshot: null,
           createdBy: "user",
           createdAt: now,
           logs: [],
         };
+
         set((state) => ({
           instances: { ...state.instances, [instanceId]: instance },
         }));
+
         return instance;
       },
     }),

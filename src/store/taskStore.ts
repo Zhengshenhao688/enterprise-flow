@@ -23,6 +23,8 @@ interface TaskState {
     toRole: Role,
     operatorRole: Role
   ) => void;
+
+  cancelTasks: (taskIds: string[], reason?: string) => void;
 }
 
 export const useTaskStore = create<TaskState>()(
@@ -105,7 +107,7 @@ export const useTaskStore = create<TaskState>()(
         }));
 
         // 2️⃣ 通知 instanceStore（由它决定是否推进 / 是否会签完成）
-        instanceStore.approve(task.instanceId, task.assigneeRole);
+        instanceStore.applyTaskAction({ taskId, action: "approve", operator: task.assigneeRole });
       },
 
       rejectTask: (taskId) => {
@@ -134,12 +136,32 @@ export const useTaskStore = create<TaskState>()(
         }));
 
         // 2️⃣ 推进拒绝逻辑（流程终止）
-        instanceStore.reject(task.instanceId, task.assigneeRole);
+        instanceStore.applyTaskAction({ taskId, action: "reject", operator: task.assigneeRole });
+      },
+
+      cancelTasks: (taskIds, reason) => {
+        if (!taskIds || taskIds.length === 0) return;
+
+        set((state) => ({
+          tasks: state.tasks.map((t) =>
+            taskIds.includes(t.id) && t.status === "pending"
+              ? {
+                  ...t,
+                  status: "cancelled",
+                  cancelledReason: reason,
+                  cancelledAt: Date.now(),
+                }
+              : t
+          ),
+        }));
       },
     }),
     {
       name: "enterprise-task-storage",
       storage: createJSONStorage(() => localStorage),
-    }
+    },
+    
+
+    
   )
 );

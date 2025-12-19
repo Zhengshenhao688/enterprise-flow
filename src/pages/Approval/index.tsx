@@ -65,16 +65,25 @@ const Approval: React.FC = () => {
     [tasks, userRole]
   );
 
-  const pendingList = useMemo(
-    () =>
-      myPendingTasks
-        .map((t) => instancesMap[t.instanceId])
-        .filter(
-          (instance): instance is ProcessInstance => instance !== undefined
-        )
-        .sort((a, b) => b.createdAt - a.createdAt),
-    [myPendingTasks, instancesMap]
-  );
+  const pendingList = useMemo(() => {
+    // 1️⃣ 找到“我名下”的 pending task
+    const myTasks = tasks.filter(
+      (t) => t.assigneeRole === userRole && t.status === "pending"
+    );
+
+    // 2️⃣ 按 instanceId 去重（一个流程实例只显示一行）
+    const uniqueInstanceIds = Array.from(
+      new Set(myTasks.map((t) => t.instanceId))
+    );
+
+    // 3️⃣ 映射成实例列表
+    return uniqueInstanceIds
+      .map((instanceId) => instancesMap[instanceId])
+      .filter(
+        (instance): instance is ProcessInstance => instance !== undefined
+      )
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }, [tasks, userRole, instancesMap]);
 
   // History list unchanged: all instances not running
   const historyList = useMemo(() => {

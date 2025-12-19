@@ -82,10 +82,10 @@ const ApprovalDetailPage: React.FC = () => {
       
       const record = instance.approvalRecords?.[node.id];
 
-      const processedCount = record?.approvedBy.length || 0;
-      const totalCount = record?.assignees.length || 0;
-      const isMatchAll = record?.mode === 'MATCH_ALL';
-      const isMatchAny = record?.mode === 'MATCH_ANY';
+      const approvedCount = record?.approvedTaskIds.length || 0;
+      const totalCount = record?.taskIds.length || 0;
+      const isMatchAll = record?.mode === "MATCH_ALL";
+      const isMatchAny = record?.mode === "MATCH_ANY";
       
       if (instance.status === 'approved') {
         status = 'finish';
@@ -95,19 +95,21 @@ const ApprovalDetailPage: React.FC = () => {
         status = index < currentStepIndex ? 'finish' : (index === currentStepIndex ? 'process' : 'wait');
       }
 
-      let progressDesc = `审核人: ${node.config?.approverRole || '任意人员'}`;
+      let progressDesc = "等待审批";
 
-      if (status === 'finish') {
+      if (record) {
         if (isMatchAny) {
-          progressDesc = processedCount >= 1 ? "或签：已有人通过" : `或签进行中 (0/${totalCount})`;
-        } else if (isMatchAll) {
-          progressDesc = (processedCount >= totalCount && totalCount > 0) ? `会签完成 (${processedCount}/${totalCount})` : `会签进行中 (${processedCount}/${totalCount})`;
+          progressDesc =
+            approvedCount >= 1
+              ? "或签：已有人通过"
+              : `或签进行中 (0/${totalCount})`;
         }
-      } else if (status === 'process') {
-        if (isMatchAny) {
-          progressDesc = processedCount >= 1 ? "或签：已有人通过" : `或签进行中 (0/${totalCount})`;
-        } else if (isMatchAll) {
-          progressDesc = (processedCount >= totalCount && totalCount > 0) ? `会签完成 (${processedCount}/${totalCount})` : `会签进行中 (${processedCount}/${totalCount})`;
+
+        if (isMatchAll) {
+          progressDesc =
+            approvedCount >= totalCount && totalCount > 0
+              ? `会签完成 (${approvedCount}/${totalCount})`
+              : `会签进行中 (${approvedCount}/${totalCount})`;
         }
       }
 

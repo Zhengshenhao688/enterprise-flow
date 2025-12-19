@@ -104,7 +104,7 @@ export interface Task {
   assigneeRole: Role;
 
   /** 任务状态 */
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | "cancelled";
 
   /** 创建时间 */
   createdAt?: string;
