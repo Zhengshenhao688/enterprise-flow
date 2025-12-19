@@ -65,22 +65,26 @@ const ApplyPage: React.FC = () => {
     try {
       await new Promise((resolve) => setTimeout(resolve, 800));
 
-      // 这里的 values 现在可以安全地传给 startProcess 了
-      const instanceId = startProcess(targetFlow, values);
+      // ✅ Step 1：先校验流程配置（非常关键）
       const firstApprovalNode = targetFlow.nodes.find(
         (n) => n.type === "approval"
       );
 
       if (!firstApprovalNode || !firstApprovalNode.config?.approverRole) {
-        throw new Error("流程配置错误：未找到第一个审批节点");
+        message.error("流程配置错误：未找到第一个审批节点");
+        return;
       }
 
       const approverRole = firstApprovalNode.config.approverRole;
       if (!isRole(approverRole)) {
-        throw new Error("流程配置错误：审批人角色无效");
+        message.error("流程配置错误：审批人角色无效");
+        return;
       }
 
-      // ⭐ 只创建 HR 的任务
+      // ✅ Step 2：校验通过后，再创建流程实例
+      const instanceId = startProcess(targetFlow, values);
+
+      // ✅ Step 3：创建首个审批任务
       createTask(
         instanceId,
         firstApprovalNode.id,

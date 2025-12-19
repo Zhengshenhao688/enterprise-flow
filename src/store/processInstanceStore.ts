@@ -23,6 +23,7 @@ export type InstanceStatus = "running" | "approved" | "rejected";
 // =====================
 export type ProcessInstance = {
   instanceId: string;
+  title: string;
   processDefinitionId: string;
   currentNodeId: string | null;
   status: InstanceStatus;
@@ -34,9 +35,9 @@ export type ProcessInstance = {
   approvalRecords: {
     [nodeId: string]: {
       mode: "MATCH_ANY" | "MATCH_ALL";
-      assignees: string[];      // 这个节点需要审批的人
-      approvedBy: string[];     // 已通过的人
-      rejectedBy: string[];     // 已拒绝的人
+      assignees: string[]; // 这个节点需要审批的人
+      approvedBy: string[]; // 已通过的人
+      rejectedBy: string[]; // 已拒绝的人
     };
   };
 
@@ -52,12 +53,18 @@ export type ProcessInstance = {
 
 type ProcessInstanceStore = {
   instances: Record<string, ProcessInstance>;
-  startProcess: (definition: ProcessDefinition, formData?: Record<string, unknown>) => string;
+  startProcess: (
+    definition: ProcessDefinition,
+    formData?: Record<string, unknown>
+  ) => string;
   getInstanceById: (instanceId: string) => ProcessInstance | undefined;
   moveToNext: (instanceId: string, nextNodeId: string | null) => void;
   approve: (instanceId: string, operator?: string) => void;
   reject: (instanceId: string, operator?: string) => void;
-  createInstance: (definitionId: string, startNodeId: string) => ProcessInstance;
+  createInstance: (
+    definitionId: string,
+    startNodeId: string
+  ) => ProcessInstance;
 };
 
 // =====================
@@ -94,8 +101,11 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
       // 发起流程
       // =====================
       startProcess: (definition, formData = {}) => {
-        const currentUserRole =
-          useAuthStore.getState().role ?? "user";
+        const title =
+          typeof formData.title === "string" && formData.title.trim()
+            ? formData.title
+            : definition.name;
+        const currentUserRole = useAuthStore.getState().role ?? "user";
 
         const startNode = definition.nodes.find((n) => n.type === "start");
         const instanceId = nanoid();
@@ -118,6 +128,7 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
 
         const instance: ProcessInstance = {
           instanceId,
+          title,
           processDefinitionId: definition.id,
           currentNodeId: firstNode ? firstNode.id : null,
           status: "running",
@@ -182,7 +193,8 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
           const instance = state.instances[instanceId];
           if (!instance || instance.status !== "running") return state;
 
-          const { currentNodeId, definitionSnapshot, approvalRecords } = instance;
+          const { currentNodeId, definitionSnapshot, approvalRecords } =
+            instance;
           if (!currentNodeId) return state;
 
           const currentNode = definitionSnapshot?.nodes.find(
@@ -339,17 +351,23 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
         });
       },
 
-
+      // ⚠️ createInstance 仅用于测试或兜底，不包含完整流程初始化逻辑
       createInstance: (definitionId: string, startNodeId: string) => {
         const instanceId = nanoid();
         const now = Date.now();
         const instance: ProcessInstance = {
           instanceId,
+
+          // ✅ 修复点：补齐 title，避免 TS 报错
+          title: "未命名流程",
+
           processDefinitionId: definitionId,
           currentNodeId: startNodeId,
           status: "running",
+
           pendingApprovers: [],
           approvalRecords: {},
+
           definitionSnapshot: null,
           createdBy: "user",
           createdAt: now,

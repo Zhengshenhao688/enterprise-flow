@@ -37,17 +37,21 @@ const MyApplications: React.FC = () => {
   const columns = [
     {
       title: "流程名称",
-      dataIndex: ["definitionSnapshot", "name"],
-      key: "name",
-      render: (name: string) => <Text strong>{name}</Text>,
+      dataIndex: "title",
+      key: "title",
+      render: (title: string) => <Text strong>{title || "-"}</Text>,
     },
     {
       title: "当前节点",
       key: "currentNode",
       render: (_: unknown, record: InstanceRecord) => {
-        const node = record.definitionSnapshot.nodes.find(
+        const nodes = record.definitionSnapshot?.nodes;
+        if (!nodes) return "-";
+
+        const node = nodes.find(
           (n: FlowNode) => n.id === record.currentNodeId
         );
+
         return node ? node.name : "-";
       },
     },
