@@ -23,6 +23,7 @@ import {
 } from "@ant-design/icons";
 
 import type { UserRole } from "../../store/useAuthStore";
+import type { Role } from "../../types/process";
 import {
   useProcessInstanceStore,
   type ProcessInstance,
@@ -349,7 +350,11 @@ const Approval: React.FC = () => {
           }
 
           // 1️⃣ Task 层：委派
-          delegateTask(delegatingTaskId, delegateToRole, userRole);
+          delegateTask(
+            delegatingTaskId,
+            delegateToRole as Role,
+            userRole as Role
+          );
 
           // 2️⃣ Instance 层：记录日志
           appendLog(delegatingInstanceId, {

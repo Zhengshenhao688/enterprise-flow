@@ -8,7 +8,12 @@
  * hr / finance 是审批角色
  * admin / user 用于系统权限（预留）
  */
-export type Role = string & { readonly __roleBrand?: unique symbol };
+export type Role =
+  | 'user'
+  | 'admin'
+  | 'manager'
+  | 'hr'
+  | 'finance';
 
 /**
  * 流程节点类型

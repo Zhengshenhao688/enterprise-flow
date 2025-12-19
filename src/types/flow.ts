@@ -6,10 +6,10 @@ export type AnchorType = "top" | "right" | "bottom" | "left"; // [cite: 194]
 
 /** 节点配置信息 */
 export type NodeConfig = {
-  approverRole?: string; // [cite: 194]
+  approverRole?: string; // 
   // --- Phase 1 核心字段 ---
-  approvalMode: ApprovalMode;   // 审批模式 [cite: 195]
-  approverList: string[];       // 审批人ID列表 [cite: 195]
+  approverRoles?: string[];
+  approvalMode: ApprovalMode;   
   processedUsers: string[];     // 运行时：已投通过票的用户ID [cite: 195]
 };
 

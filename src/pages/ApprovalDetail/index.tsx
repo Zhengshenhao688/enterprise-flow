@@ -83,8 +83,9 @@ const ApprovalDetailPage: React.FC = () => {
       const record = instance.approvalRecords?.[node.id];
 
       const processedCount = record?.approvedBy.length || 0;
-      const totalCount = record?.assignees.length || 1;
+      const totalCount = record?.assignees.length || 0;
       const isMatchAll = record?.mode === 'MATCH_ALL';
+      const isMatchAny = record?.mode === 'MATCH_ANY';
       
       if (instance.status === 'approved') {
         status = 'finish';
@@ -95,10 +96,19 @@ const ApprovalDetailPage: React.FC = () => {
       }
 
       let progressDesc = `审核人: ${node.config?.approverRole || '任意人员'}`;
-      if (status === 'process') {
-        progressDesc = `${isMatchAll ? '会签' : '或签'} 进度: ${processedCount}/${totalCount} 人已通过`;
-      } else if (status === 'finish') {
-        progressDesc = `已完成审批 (${processedCount}/${totalCount})`;
+
+      if (status === 'finish') {
+        if (isMatchAny) {
+          progressDesc = processedCount >= 1 ? "或签：已有人通过" : `或签进行中 (0/${totalCount})`;
+        } else if (isMatchAll) {
+          progressDesc = (processedCount >= totalCount && totalCount > 0) ? `会签完成 (${processedCount}/${totalCount})` : `会签进行中 (${processedCount}/${totalCount})`;
+        }
+      } else if (status === 'process') {
+        if (isMatchAny) {
+          progressDesc = processedCount >= 1 ? "或签：已有人通过" : `或签进行中 (0/${totalCount})`;
+        } else if (isMatchAll) {
+          progressDesc = (processedCount >= totalCount && totalCount > 0) ? `会签完成 (${processedCount}/${totalCount})` : `会签进行中 (${processedCount}/${totalCount})`;
+        }
       }
 
       return { title: node.name, description: progressDesc, status };

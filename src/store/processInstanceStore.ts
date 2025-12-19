@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { nanoid } from "nanoid";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { ProcessDefinition } from "../types/flow";
+import type { Role } from "../types/process";
 import { useAuthStore } from "./useAuthStore";
 import type { UserRole } from "./useAuthStore";
 import { useTaskStore } from "./taskStore";
@@ -84,10 +85,12 @@ function getPendingApproversFromNode(
 ): string[] {
   if (!node || node.type !== "approval") return [];
 
-  if (node.config.approvalMode === "MATCH_ALL") {
-    return node.config.approverList || [];
+  // ✅ 新定义态优先：多审批角色
+  if (Array.isArray(node.config.approverRoles) && node.config.approverRoles.length > 0) {
+    return node.config.approverRoles;
   }
 
+  // ✅ 旧流程兜底：单审批角色
   return node.config.approverRole ? [node.config.approverRole] : [];
 }
 
@@ -116,6 +119,18 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
         // 从 start → 下一个节点
         const firstNode = getNextNode(definition, startNode?.id || null);
         const pendingApprovers = getPendingApproversFromNode(firstNode);
+
+        // ⭐ 创建首批审批任务（流程启动即生成）
+        if (firstNode && firstNode.type === "approval") {
+          const taskStore = useTaskStore.getState();
+          pendingApprovers.forEach((role) => {
+            taskStore.createTask(
+              instanceId,
+              firstNode.id,
+              role as Role
+            );
+          });
+        }
 
         const approvalRecords: ProcessInstance["approvalRecords"] = {};
 
@@ -248,22 +263,22 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
             } else if (nextNode.type === "approval") {
               const taskStore = useTaskStore.getState();
 
-              const exists = taskStore.tasks.some(
-                (t) =>
-                  t.instanceId === instanceId &&
-                  t.nodeId === nextNode.id &&
-                  t.status === "pending"
-              );
-
-              if (!exists && nextNode.config?.approverRole) {
-                taskStore.createTask(
-                  instanceId,
-                  nextNode.id,
-                  nextNode.config.approverRole
-                );
-              }
-
               const nextAssignees = getPendingApproversFromNode(nextNode);
+
+              nextAssignees.forEach((assigneeRole) => {
+                const exists = taskStore.tasks.some(
+                  (t) =>
+                    t.instanceId === instanceId &&
+                    t.nodeId === nextNode.id &&
+                    t.assigneeRole === (assigneeRole as Role) &&
+                    t.status === "pending"
+                );
+
+                if (!exists) {
+                  taskStore.createTask(instanceId, nextNode.id, assigneeRole as Role);
+                }
+              });
+
               nextPendingApprovers = nextAssignees;
 
               nextApprovalRecords[nextNode.id] = {

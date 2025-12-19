@@ -95,9 +95,18 @@ export const useFlowStore = create<FlowStore>()(
           const newNode: FlowNode = {
             ...node,
             config: {
-              approverRole: node.config?.approverRole || 'Admin',
-              approvalMode: 'MATCH_ANY', 
-              approverList: [],
+              // 旧字段兼容（如果是老流程）
+              approverRole: node.config?.approverRole,
+
+              // 新字段：多审批角色（定义态）
+              approverRoles:
+                node.config?.approverRoles ??
+                (node.config?.approverRole ? [node.config.approverRole] : ['hr']),
+
+              // 审批模式：默认或签
+              approvalMode: node.config?.approvalMode ?? 'MATCH_ANY',
+
+              // 运行态字段（此阶段仅初始化）
               processedUsers: [],
             }
           };

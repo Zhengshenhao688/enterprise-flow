@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { nanoid } from "nanoid";
 import type { Task, Role } from "../types/process";
 import { useProcessInstanceStore } from "./processInstanceStore";
 import { assertTaskAtCurrentNode } from "../utils/guards";
@@ -23,122 +25,121 @@ interface TaskState {
   ) => void;
 }
 
-export const useTaskStore = create<TaskState>((set, get) => ({
-  tasks: [],
+export const useTaskStore = create<TaskState>()(
+  persist(
+    (set, get) => ({
+      tasks: [],
 
-  createTask: (instanceId, nodeId, assigneeRole) => {
-    const task: Task = {
-      id: Date.now().toString(),
-      instanceId,
-      nodeId,
-      assigneeRole,
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    };
+      createTask: (instanceId, nodeId, assigneeRole) => {
+        const task: Task = {
+          id: nanoid(),
+          instanceId,
+          nodeId,
+          assigneeRole,
+          status: "pending",
+          createdAt: new Date().toISOString(),
+        };
 
-    console.log("[TaskStore.createTask]", {
-      instanceId,
-      nodeId,
-      assigneeRole,
-    });
+        console.log("[TaskStore.createTask]", {
+          instanceId,
+          nodeId,
+          assigneeRole,
+        });
 
-    set((state) => ({
-      tasks: [...state.tasks, task],
-    }));
+        set((state) => ({
+          tasks: [...state.tasks, task],
+        }));
 
-    return task;
-  },
+        return task;
+      },
 
-  getTasksByRole: (role) => {
-    return get().tasks.filter(
-      (t) => t.assigneeRole === role && t.status === "pending"
-    );
-  },
+      getTasksByRole: (role) => {
+        return get().tasks.filter(
+          (t) => t.assigneeRole === role && t.status === "pending"
+        );
+      },
 
-  delegateTask: (taskId, toRole, operatorRole) => {
-    const task = get().tasks.find((t) => t.id === taskId);
-    if (!task) return;
+      delegateTask: (taskId, toRole, operatorRole) => {
+        const task = get().tasks.find((t) => t.id === taskId);
+        if (!task) return;
 
-    // 仅允许 pending 的任务被委派
-    if (task.status !== "pending") return;
+        // 仅允许 pending 的任务被委派
+        if (task.status !== "pending") return;
 
-    // 仅允许当前审批人委派
-    if (task.assigneeRole !== operatorRole) return;
+        // 仅允许当前审批人委派
+        if (task.assigneeRole !== operatorRole) return;
 
-    set((state) => ({
-      tasks: state.tasks.map((t) =>
-        t.id === taskId
-          ? {
-              ...t,
-              assigneeRole: toRole,
-              delegatedFrom: operatorRole,
-              delegatedAt: Date.now(),
-            }
-          : t
-      ),
-    }));
-  },
+        set((state) => ({
+          tasks: state.tasks.map((t) =>
+            t.id === taskId
+              ? {
+                  ...t,
+                  assigneeRole: toRole,
+                  delegatedFrom: operatorRole,
+                  delegatedAt: Date.now(),
+                }
+              : t
+          ),
+        }));
+      },
 
-  approveTask: (taskId) => {
-    console.log("[TaskStore.approveTask]", taskId);
+      approveTask: (taskId) => {
+        const task = get().tasks.find((t) => t.id === taskId);
+        if (!task || task.status !== "pending") return;
 
-    const task = get().tasks.find((t) => t.id === taskId);
-    if (!task) return;
+        const instanceStore = useProcessInstanceStore.getState();
+        const instance = instanceStore.getInstanceById(task.instanceId);
+        if (!instance) return;
 
-    const instanceStore = useProcessInstanceStore.getState();
-    const instance = instanceStore.getInstanceById(task.instanceId);
-    if (!instance) return;
+        // 防抢跑：必须是当前节点
+        assertTaskAtCurrentNode({
+          taskNodeId: task.nodeId,
+          currentNodeId: instance.currentNodeId,
+        });
 
-    // ⭐ 防止抢跑：task 必须对应当前节点
-    assertTaskAtCurrentNode({
-      taskNodeId: task.nodeId,
-      currentNodeId: instance.currentNodeId,
-    });
+        // 1️⃣ 标记 task 已完成
+        set((state) => ({
+          tasks: state.tasks.map((t) =>
+            t.id === taskId ? { ...t, status: "approved" } : t
+          ),
+        }));
 
-    // 1️⃣ 更新 task 状态
-    set((state) => ({
-      tasks: state.tasks.map((t) =>
-        t.id === taskId && t.status === "pending"
-          ? { ...t, status: "approved" }
-          : t
-      ),
-    }));
+        // 2️⃣ 通知 instanceStore（由它决定是否推进 / 是否会签完成）
+        instanceStore.approve(task.instanceId, task.assigneeRole);
+      },
 
-    // ⭐ 防重复推进（必须仍然停留在当前节点）
-    if (instance.currentNodeId !== task.nodeId) {
-      return;
+      rejectTask: (taskId) => {
+        console.log("[TaskStore.rejectTask]", taskId);
+
+        const task = get().tasks.find((t) => t.id === taskId);
+        if (!task) return;
+
+        const instanceStore = useProcessInstanceStore.getState();
+        const instance = instanceStore.getInstanceById(task.instanceId);
+        if (!instance) return;
+
+        // ⭐ 防止抢跑
+        assertTaskAtCurrentNode({
+          taskNodeId: task.nodeId,
+          currentNodeId: instance.currentNodeId,
+        });
+
+        // 1️⃣ 更新 task 状态
+        set((state) => ({
+          tasks: state.tasks.map((t) =>
+            t.id === taskId && t.status === "pending"
+              ? { ...t, status: "rejected" }
+              : t
+          ),
+        }));
+
+        // 2️⃣ 推进拒绝逻辑（流程终止）
+        instanceStore.reject(task.instanceId, task.assigneeRole);
+      },
+    }),
+    {
+      name: "enterprise-task-storage",
+      storage: createJSONStorage(() => localStorage),
     }
-
-    // 2️⃣ ⭐ 核心：推进流程（由 instanceStore 负责创建下一 task）
-    instanceStore.approve(task.instanceId, task.assigneeRole);
-  },
-
-  rejectTask: (taskId) => {
-    console.log("[TaskStore.rejectTask]", taskId);
-
-    const task = get().tasks.find((t) => t.id === taskId);
-    if (!task) return;
-
-    const instanceStore = useProcessInstanceStore.getState();
-    const instance = instanceStore.getInstanceById(task.instanceId);
-    if (!instance) return;
-
-    // ⭐ 防止抢跑
-    assertTaskAtCurrentNode({
-      taskNodeId: task.nodeId,
-      currentNodeId: instance.currentNodeId,
-    });
-
-    // 1️⃣ 更新 task 状态
-    set((state) => ({
-      tasks: state.tasks.map((t) =>
-        t.id === taskId && t.status === "pending"
-          ? { ...t, status: "rejected" }
-          : t
-      ),
-    }));
-
-    // 2️⃣ 推进拒绝逻辑（流程终止）
-    instanceStore.reject(task.instanceId, task.assigneeRole);
-  },
-}));
+  )
+);

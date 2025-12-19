@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import type { Role } from "../../types/process";
+//import type { Role } from "../../types/process";
 import {
   Card,
   Typography,
@@ -17,7 +17,6 @@ import { useNavigate } from "react-router-dom";
 import { useFlowStore } from "../../store/flowStore";
 import { useProcessInstanceStore } from "../../store/processInstanceStore";
 import { useAuthStore } from "../../store/useAuthStore";
-import { useTaskStore } from "../../store/taskStore";
 
 
 const { Title, Paragraph, Text } = Typography;
@@ -31,12 +30,8 @@ interface ApplyFormData extends Record<string, unknown> {
   reason: string;
 }
 
-function isRole(value: string): value is Role {
-  return ["hr", "finance", "admin", "user", "manager"].includes(value);
-}
 
 const ApplyPage: React.FC = () => {
-  const createTask = useTaskStore((s) => s.createTask);
   const navigate = useNavigate();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
@@ -65,31 +60,8 @@ const ApplyPage: React.FC = () => {
     try {
       await new Promise((resolve) => setTimeout(resolve, 800));
 
-      // ✅ Step 1：先校验流程配置（非常关键）
-      const firstApprovalNode = targetFlow.nodes.find(
-        (n) => n.type === "approval"
-      );
-
-      if (!firstApprovalNode || !firstApprovalNode.config?.approverRole) {
-        message.error("流程配置错误：未找到第一个审批节点");
-        return;
-      }
-
-      const approverRole = firstApprovalNode.config.approverRole;
-      if (!isRole(approverRole)) {
-        message.error("流程配置错误：审批人角色无效");
-        return;
-      }
-
-      // ✅ Step 2：校验通过后，再创建流程实例
+      // ✅ 启动流程（task 由运行态自动生成）
       const instanceId = startProcess(targetFlow, values);
-
-      // ✅ Step 3：创建首个审批任务
-      createTask(
-        instanceId,
-        firstApprovalNode.id,
-        approverRole
-      );
 
       message.success(`申请提交成功！(单号: ${instanceId})`);
 
@@ -114,9 +86,11 @@ const ApplyPage: React.FC = () => {
           .filter((n) => n.type === "approval")
           .map((n) => ({
             title: n.name,
-            description: n.config?.approverRole
-              ? `审核: ${n.config.approverRole}`
-              : "审批节点",
+            description: Array.isArray(n.config?.approverRoles) && n.config.approverRoles.length > 0
+              ? `审核: ${n.config.approverRoles.join(" / ")}`
+              : n.config?.approverRole
+                ? `审核: ${n.config.approverRole}`
+                : "审批节点",
           })),
         { title: "流程结束", status: "wait" as const },
       ]
