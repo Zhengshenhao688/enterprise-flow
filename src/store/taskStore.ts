@@ -14,6 +14,13 @@ interface TaskState {
 
   approveTask: (taskId: string) => void;
   rejectTask: (taskId: string) => void;
+
+  /** 委派审批任务 */
+  delegateTask: (
+    taskId: string,
+    toRole: Role,
+    operatorRole: Role
+  ) => void;
 }
 
 export const useTaskStore = create<TaskState>((set, get) => ({
@@ -29,6 +36,12 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       createdAt: new Date().toISOString(),
     };
 
+    console.log("[TaskStore.createTask]", {
+      instanceId,
+      nodeId,
+      assigneeRole,
+    });
+
     set((state) => ({
       tasks: [...state.tasks, task],
     }));
@@ -42,7 +55,33 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     );
   },
 
+  delegateTask: (taskId, toRole, operatorRole) => {
+    const task = get().tasks.find((t) => t.id === taskId);
+    if (!task) return;
+
+    // 仅允许 pending 的任务被委派
+    if (task.status !== "pending") return;
+
+    // 仅允许当前审批人委派
+    if (task.assigneeRole !== operatorRole) return;
+
+    set((state) => ({
+      tasks: state.tasks.map((t) =>
+        t.id === taskId
+          ? {
+              ...t,
+              assigneeRole: toRole,
+              delegatedFrom: operatorRole,
+              delegatedAt: Date.now(),
+            }
+          : t
+      ),
+    }));
+  },
+
   approveTask: (taskId) => {
+    console.log("[TaskStore.approveTask]", taskId);
+
     const task = get().tasks.find((t) => t.id === taskId);
     if (!task) return;
 
@@ -75,6 +114,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   },
 
   rejectTask: (taskId) => {
+    console.log("[TaskStore.rejectTask]", taskId);
+
     const task = get().tasks.find((t) => t.id === taskId);
     if (!task) return;
 

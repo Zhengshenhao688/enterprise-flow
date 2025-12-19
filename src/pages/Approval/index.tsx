@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Table,
   Tag,
@@ -11,6 +11,8 @@ import {
   Tabs,
   Empty,
   Alert,
+  Modal,
+  Select,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useNavigate } from "react-router-dom";
@@ -20,6 +22,7 @@ import {
   HistoryOutlined,
 } from "@ant-design/icons";
 
+import type { UserRole } from "../../store/useAuthStore";
 import {
   useProcessInstanceStore,
   type ProcessInstance,
@@ -41,6 +44,13 @@ const Approval: React.FC = () => {
 
   const tasks = useTaskStore((s) => s.tasks);
   const approveTask = useTaskStore((s) => s.approveTask);
+  const delegateTask = useTaskStore((s) => s.delegateTask);
+  const appendLog = useProcessInstanceStore((s) => s.appendLog);
+
+  const [delegateVisible, setDelegateVisible] = useState(false);
+  const [delegatingTaskId, setDelegatingTaskId] = useState<string | null>(null);
+  const [delegatingInstanceId, setDelegatingInstanceId] = useState<string | null>(null);
+  const [delegateToRole, setDelegateToRole] = useState<UserRole | null>(null);
 
   // =========================================================
   // 1) Compute myPendingTasks: tasks assigned to current user role and pending
@@ -160,40 +170,67 @@ const Approval: React.FC = () => {
           </Button>
 
           {!isHistory && record.status === "running" && (
-            <Tooltip title="快速通过">
+            <>
               <Button
-                type="text"
+                type="link"
                 size="small"
-                style={{ color: "#52c41a" }}
-                icon={<CheckCircleOutlined />}
                 onClick={() => {
-                  try {
-                    const task = tasks.find(
-                      (t) =>
-                        t.instanceId === record.instanceId &&
-                        t.assigneeRole === userRole &&
-                        t.status === "pending"
-                    );
+                  const task = tasks.find(
+                    (t) =>
+                      t.instanceId === record.instanceId &&
+                      t.assigneeRole === userRole &&
+                      t.status === "pending"
+                  );
 
-                    if (!task) {
-                      message.error("未找到对应的待办任务，无法快速通过");
-                      return;
-                    }
-
-                    // 先把当前 task 标记为已审批（内部会做 currentNode 校验）
-                    approveTask(task.id);
-
-                    message.success("已通过审批并推进到下一节点");
-                  } catch (e) {
-                    if (e instanceof ApprovalGuardError) {
-                      message.error(e.message);
-                      return;
-                    }
-                    throw e;
+                  if (!task) {
+                    message.error("未找到可委派的待办任务");
+                    return;
                   }
+
+                  setDelegatingTaskId(task.id);
+                  setDelegatingInstanceId(record.instanceId);
+                  setDelegateToRole(null);
+                  setDelegateVisible(true);
                 }}
-              />
-            </Tooltip>
+              >
+                委派
+              </Button>
+
+              <Tooltip title="快速通过">
+                <Button
+                  type="text"
+                  size="small"
+                  style={{ color: "#52c41a" }}
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => {
+                    try {
+                      const task = tasks.find(
+                        (t) =>
+                          t.instanceId === record.instanceId &&
+                          t.assigneeRole === userRole &&
+                          t.status === "pending"
+                      );
+
+                      if (!task) {
+                        message.error("未找到对应的待办任务，无法快速通过");
+                        return;
+                      }
+
+                      // 先把当前 task 标记为已审批（内部会做 currentNode 校验）
+                      approveTask(task.id);
+
+                      message.success("已通过审批并推进到下一节点");
+                    } catch (e) {
+                      if (e instanceof ApprovalGuardError) {
+                        message.error(e.message);
+                        return;
+                      }
+                      throw e;
+                    }
+                  }}
+                />
+              </Tooltip>
+            </>
           )}
         </Space>
       ),
@@ -300,6 +337,45 @@ const Approval: React.FC = () => {
           </div>
         )}
       </Card>
+
+      <Modal
+        title="委派审批任务"
+        open={delegateVisible}
+        onCancel={() => setDelegateVisible(false)}
+        onOk={() => {
+          if (!delegatingTaskId || !delegatingInstanceId || !delegateToRole || !userRole) {
+            message.error("请选择委派角色");
+            return;
+          }
+
+          // 1️⃣ Task 层：委派
+          delegateTask(delegatingTaskId, delegateToRole, userRole);
+
+          // 2️⃣ Instance 层：记录日志
+          appendLog(delegatingInstanceId, {
+            date: Date.now(),
+            action: "delegate",
+            operator: userRole,
+            comment: `委派给 ${delegateToRole}`,
+          });
+
+          message.success("委派成功");
+          setDelegateVisible(false);
+        }}
+      >
+        <Select<UserRole>
+          placeholder="请选择委派给的角色"
+          style={{ width: "100%" }}
+          value={delegateToRole}
+          onChange={(val) => setDelegateToRole(val)}
+          options={[
+            { label: "管理员 (Admin)", value: "admin" },
+            { label: "人事 (HR)", value: "hr" },
+            { label: "财务 (Finance)", value: "finance" },
+            { label: "部门经理 (Manager)", value: "manager" },
+          ].filter((opt) => opt.value !== userRole)}
+        />
+      </Modal>
     </div>
   );
 };

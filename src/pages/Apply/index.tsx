@@ -32,7 +32,7 @@ interface ApplyFormData extends Record<string, unknown> {
 }
 
 function isRole(value: string): value is Role {
-  return ["hr", "finance", "admin", "user"].includes(value);
+  return ["hr", "finance", "admin", "user", "manager"].includes(value);
 }
 
 const ApplyPage: React.FC = () => {

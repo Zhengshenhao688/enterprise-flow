@@ -11,7 +11,7 @@ import { useTaskStore } from "./taskStore";
 // =====================
 export type ApprovalLog = {
   date: number;
-  action: "submit" | "approve" | "reject";
+  action: "submit" | "approve" | "reject" | "delegate";
   operator: string;
   comment?: string;
 };
@@ -65,6 +65,8 @@ type ProcessInstanceStore = {
     definitionId: string,
     startNodeId: string
   ) => ProcessInstance;
+  /** 追加审批日志（用于委派等非流转行为） */
+  appendLog: (instanceId: string, log: ApprovalLog) => void;
 };
 
 // =====================
@@ -314,6 +316,26 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
                     comment: `会签进行中 (${updatedRecord.approvedBy.length}/${updatedRecord.assignees.length})`,
                   },
                 ],
+              },
+            },
+          };
+        });
+      },
+
+      // =====================
+      // 追加日志（不影响流程）
+      // =====================
+      appendLog: (instanceId, log) => {
+        set((state) => {
+          const instance = state.instances[instanceId];
+          if (!instance) return state;
+
+          return {
+            instances: {
+              ...state.instances,
+              [instanceId]: {
+                ...instance,
+                logs: [...instance.logs, log],
               },
             },
           };

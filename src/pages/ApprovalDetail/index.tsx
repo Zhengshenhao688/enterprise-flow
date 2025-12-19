@@ -8,7 +8,8 @@ import {
   ArrowLeftOutlined, 
   CheckCircleOutlined, 
   CloseCircleOutlined, 
-  UserOutlined 
+  UserOutlined,
+  SwapOutlined
 } from "@ant-design/icons";
 
 import { useProcessInstanceStore } from "../../store/processInstanceStore";
@@ -246,23 +247,64 @@ const ApprovalDetailPage: React.FC = () => {
 
           {/* 右侧：审批日志 */}
           <Card title="审批流转动态" variant="outlined" style={{ width: 400, flexShrink: 0 }}>
-            <Timeline 
-              items={instance.logs.map(log => ({
-                color: log.action === 'submit' ? 'blue' : (log.action === 'approve' ? 'green' : 'red'),
-                content: (
-                  <div key={log.date}>
-                    <Space>
-                      <Text strong>{log.operator}</Text> 
-                      <Tag>{log.action.toUpperCase()}</Tag>
-                    </Space>
-                    <div style={{ marginTop: 4 }}>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        {new Date(log.date).toLocaleString()}
-                      </Text>
+            <Timeline
+              items={instance.logs.map((log) => {
+                let color: string = "blue";
+                let icon: React.ReactNode = <UserOutlined />;
+                let actionText = "";
+
+                switch (log.action) {
+                  case "submit":
+                    color = "blue";
+                    icon = <UserOutlined />;
+                    actionText = "提交申请";
+                    break;
+                  case "approve":
+                    color = "green";
+                    icon = <CheckCircleOutlined />;
+                    actionText = "通过审批";
+                    break;
+                  case "reject":
+                    color = "red";
+                    icon = <CloseCircleOutlined />;
+                    actionText = "驳回审批";
+                    break;
+                  case "delegate":
+                    color = "orange";
+                    icon = <SwapOutlined />;
+                    actionText = "委派审批";
+                    break;
+                  default:
+                    actionText = log.action;
+                }
+
+                return {
+                  color,
+                  dot: icon,
+                  content: (
+                    <div key={log.date}>
+                      <Space>
+                        <Text strong>{log.operator}</Text>
+                        <Text>{actionText}</Text>
+                      </Space>
+
+                      {log.comment && (
+                        <div style={{ marginTop: 4 }}>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {log.comment}
+                          </Text>
+                        </div>
+                      )}
+
+                      <div style={{ marginTop: 4 }}>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {new Date(log.date).toLocaleString()}
+                        </Text>
+                      </div>
                     </div>
-                  </div>
-                )
-              }))} 
+                  ),
+                };
+              })}
             />
           </Card>
         </div>
