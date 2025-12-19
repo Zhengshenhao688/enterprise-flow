@@ -4,6 +4,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import type { ProcessDefinition } from "../types/flow";
 import { useAuthStore } from "./useAuthStore";
 import type { UserRole } from "./useAuthStore";
+import { useTaskStore } from "./taskStore";
 
 // =====================
 // 审批日志
@@ -40,7 +41,7 @@ export type ProcessInstance = {
   };
 
   /** 设计器快照（锁定审批配置） */
-  definitionSnapshot: ProcessDefinition;
+  definitionSnapshot: ProcessDefinition | null;
 
   /** ⭐ 流程发起人（角色 Key，如 user / admin） */
   createdBy: UserRole;
@@ -53,8 +54,10 @@ type ProcessInstanceStore = {
   instances: Record<string, ProcessInstance>;
   startProcess: (definition: ProcessDefinition, formData?: Record<string, unknown>) => string;
   getInstanceById: (instanceId: string) => ProcessInstance | undefined;
+  moveToNext: (instanceId: string, nextNodeId: string | null) => void;
   approve: (instanceId: string, operator?: string) => void;
   reject: (instanceId: string, operator?: string) => void;
+  createInstance: (definitionId: string, startNodeId: string) => ProcessInstance;
 };
 
 // =====================
@@ -145,6 +148,32 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
 
       getInstanceById: (instanceId) => get().instances[instanceId],
 
+      moveToNext: (instanceId, nextNodeId) => {
+        set((state) => {
+          const instance = state.instances[instanceId];
+          if (!instance || instance.status !== "running") return state;
+
+          return {
+            instances: {
+              ...state.instances,
+              [instanceId]: {
+                ...instance,
+                currentNodeId: nextNodeId,
+                logs: [
+                  ...instance.logs,
+                  {
+                    date: Date.now(),
+                    action: "approve",
+                    operator: "system",
+                    comment: "推进到下一节点",
+                  },
+                ],
+              },
+            },
+          };
+        });
+      },
+
       // =====================
       // 审批通过
       // =====================
@@ -156,7 +185,7 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
           const { currentNodeId, definitionSnapshot, approvalRecords } = instance;
           if (!currentNodeId) return state;
 
-          const currentNode = definitionSnapshot.nodes.find(
+          const currentNode = definitionSnapshot?.nodes.find(
             (n) => n.id === currentNodeId
           );
           if (!currentNode || currentNode.type !== "approval") return state;
@@ -194,7 +223,7 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
 
           // ========= 可以流转 =========
           if (shouldMove) {
-            const nextNode = getNextNode(definitionSnapshot, currentNodeId);
+            const nextNode = getNextNode(definitionSnapshot!, currentNodeId);
 
             let newStatus: InstanceStatus = "running";
             let nextPendingApprovers: string[] = [];
@@ -203,6 +232,23 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
             if (!nextNode || nextNode.type === "end") {
               newStatus = "approved";
             } else if (nextNode.type === "approval") {
+              const taskStore = useTaskStore.getState();
+
+              const exists = taskStore.tasks.some(
+                (t) =>
+                  t.instanceId === instanceId &&
+                  t.nodeId === nextNode.id &&
+                  t.status === "pending"
+              );
+
+              if (!exists && nextNode.config?.approverRole) {
+                taskStore.createTask(
+                  instanceId,
+                  nextNode.id,
+                  nextNode.config.approverRole
+                );
+              }
+
               const nextAssignees = getPendingApproversFromNode(nextNode);
               nextPendingApprovers = nextAssignees;
 
@@ -291,6 +337,28 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
             },
           };
         });
+      },
+
+
+      createInstance: (definitionId: string, startNodeId: string) => {
+        const instanceId = nanoid();
+        const now = Date.now();
+        const instance: ProcessInstance = {
+          instanceId,
+          processDefinitionId: definitionId,
+          currentNodeId: startNodeId,
+          status: "running",
+          pendingApprovers: [],
+          approvalRecords: {},
+          definitionSnapshot: null,
+          createdBy: "user",
+          createdAt: now,
+          logs: [],
+        };
+        set((state) => ({
+          instances: { ...state.instances, [instanceId]: instance },
+        }));
+        return instance;
       },
     }),
     {

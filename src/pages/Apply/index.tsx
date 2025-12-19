@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import type { Role } from "../../types/process";
 import {
   Card,
   Typography,
@@ -16,6 +17,8 @@ import { useNavigate } from "react-router-dom";
 import { useFlowStore } from "../../store/flowStore";
 import { useProcessInstanceStore } from "../../store/processInstanceStore";
 import { useAuthStore } from "../../store/useAuthStore";
+import { useTaskStore } from "../../store/taskStore";
+
 
 const { Title, Paragraph, Text } = Typography;
 const { Content } = Layout;
@@ -28,7 +31,12 @@ interface ApplyFormData extends Record<string, unknown> {
   reason: string;
 }
 
+function isRole(value: string): value is Role {
+  return ["hr", "finance", "admin", "user"].includes(value);
+}
+
 const ApplyPage: React.FC = () => {
+  const createTask = useTaskStore((s) => s.createTask);
   const navigate = useNavigate();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
@@ -59,6 +67,25 @@ const ApplyPage: React.FC = () => {
 
       // 这里的 values 现在可以安全地传给 startProcess 了
       const instanceId = startProcess(targetFlow, values);
+      const firstApprovalNode = targetFlow.nodes.find(
+        (n) => n.type === "approval"
+      );
+
+      if (!firstApprovalNode || !firstApprovalNode.config?.approverRole) {
+        throw new Error("流程配置错误：未找到第一个审批节点");
+      }
+
+      const approverRole = firstApprovalNode.config.approverRole;
+      if (!isRole(approverRole)) {
+        throw new Error("流程配置错误：审批人角色无效");
+      }
+
+      // ⭐ 只创建 HR 的任务
+      createTask(
+        instanceId,
+        firstApprovalNode.id,
+        approverRole
+      );
 
       message.success(`申请提交成功！(单号: ${instanceId})`);
 
@@ -137,7 +164,7 @@ const ApplyPage: React.FC = () => {
         <div style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
           {/* 左侧：表单区 */}
           <div style={{ flex: 1 }}>
-            <Card title="业务申请单"  variant="outlined">
+            <Card title="业务申请单" variant="outlined">
               <Form
                 form={form}
                 layout="vertical"

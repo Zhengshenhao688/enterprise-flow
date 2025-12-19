@@ -3,9 +3,11 @@ import { useAuthStore } from '../store/useAuthStore';
 import { Button, Result } from 'antd';
 import type { ReactNode } from 'react';
 
+type Role = 'admin' | 'user';
+
 interface Props {
   children: ReactNode;
-  allowedRoles?: ('admin' | 'user')[]; 
+  allowedRoles?: Role[];
 }
 
 export default function ProtectedRoute({ children, allowedRoles }: Props) {
@@ -13,21 +15,31 @@ export default function ProtectedRoute({ children, allowedRoles }: Props) {
   const role = useAuthStore((s) => s.role);
   const location = useLocation();
 
-  // 1. 尚未登录 -> 重定向到登录页
+  // 1. 未登录 -> 跳转登录页
   if (!token) {
-    // state={{ from: location }} 用于登录后跳回之前的页面（可选优化）
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
   // 2. 角色权限校验
-  // 如果当前路由限制了角色，且当前用户角色不在允许列表中
-  if (allowedRoles && role && !allowedRoles.includes(role)) {
+  // 只有当 allowedRoles 存在 且 role 是合法角色时才校验
+  if (
+    allowedRoles &&
+    (role === 'admin' || role === 'user') &&
+    !allowedRoles.includes(role)
+  ) {
     return (
-      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div
+        style={{
+          height: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
         <Result
           status="403"
           title="403"
-          subTitle="抱歉，您没有权限访问此页面 (仅管理员可见)。"
+          subTitle="抱歉，您没有权限访问此页面（仅管理员可见）。"
           extra={
             <Button type="primary" onClick={() => window.history.back()}>
               返回上一页
@@ -38,6 +50,6 @@ export default function ProtectedRoute({ children, allowedRoles }: Props) {
     );
   }
 
-  // 3. 校验通过，渲染子组件
+  // 3. 校验通过
   return <>{children}</>;
 }

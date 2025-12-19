@@ -10,6 +10,7 @@ import {
   Space,
   Tabs,
   Empty,
+  Alert,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useNavigate } from "react-router-dom";
@@ -24,56 +25,52 @@ import {
   type ProcessInstance,
 } from "../../store/processInstanceStore";
 import { useAuthStore } from "../../store/useAuthStore";
+import { useTaskStore } from "../../store/taskStore";
+import { ApprovalGuardError } from "../../utils/guards";
 
 const { Title, Text } = Typography;
 
 const Approval: React.FC = () => {
   const navigate = useNavigate();
 
-  // 获取当前用户角色并标准化
+  // 获取当前用户角色（保持原样，不做额外处理）
   const userRole = useAuthStore((s) => s.role);
-  const currentUserKey = userRole?.trim().toLowerCase() || "";
 
   const instancesMap = useProcessInstanceStore((s) => s.instances);
-  const approve = useProcessInstanceStore((s) => s.approve);
+  //const approveInstance = useProcessInstanceStore((s) => s.approve);
+
+  const tasks = useTaskStore((s) => s.tasks);
+  const approveTask = useTaskStore((s) => s.approveTask);
 
   // =========================================================
-  // ⭐ 核心修复：细化数据过滤逻辑 (Step 3)
+  // 1) Compute myPendingTasks: tasks assigned to current user role and pending
+  // 2) Derive pendingList strictly from myPendingTasks mapping to instances
   // =========================================================
-  const { pendingList, historyList } = useMemo(() => {
-    const all = Object.values(instancesMap).sort(
-      (a, b) => b.createdAt - a.createdAt
-    );
+  const myPendingTasks = useMemo(
+    () =>
+      tasks.filter(
+        (t) => t.assigneeRole === userRole && t.status === "pending"
+      ),
+    [tasks, userRole]
+  );
 
-    const pending: ProcessInstance[] = [];
-    const history: ProcessInstance[] = [];
+  const pendingList = useMemo(
+    () =>
+      myPendingTasks
+        .map((t) => instancesMap[t.instanceId])
+        .filter(
+          (instance): instance is ProcessInstance => instance !== undefined
+        )
+        .sort((a, b) => b.createdAt - a.createdAt),
+    [myPendingTasks, instancesMap]
+  );
 
-    all.forEach((instance) => {
-      // 1️⃣ 历史
-      if (instance.status !== "running") {
-        history.push(instance);
-        return;
-      }
-
-      const currentNodeId = instance.currentNodeId;
-      if (!currentNodeId) return;
-
-      const record = instance.approvalRecords?.[currentNodeId];
-      if (!record) return;
-
-      // ⭐ 真正的“是否还能审批”判断（会签 / 或签通用）
-      const canApprove =
-        record.assignees.includes(currentUserKey) &&
-        !record.approvedBy.includes(currentUserKey) &&
-        !record.rejectedBy.includes(currentUserKey);
-
-      if (canApprove) {
-        pending.push(instance);
-      }
-    });
-
-    return { pendingList: pending, historyList: history };
-  }, [instancesMap, currentUserKey]);
+  // History list unchanged: all instances not running
+  const historyList = useMemo(() => {
+    return Object.values(instancesMap)
+      .filter((instance) => instance.status !== "running")
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }, [instancesMap]);
 
   // --- 表格列定义 ---
   const getColumns = (isHistory = false): ColumnsType<ProcessInstance> => [
@@ -95,7 +92,12 @@ const Approval: React.FC = () => {
     {
       title: "流程类型",
       key: "processName",
-      render: (_, record) => <Tag>{record.definitionSnapshot.name}</Tag>,
+      render: (_, record) =>
+        record.definitionSnapshot ? (
+          <Tag>{record.definitionSnapshot.name}</Tag>
+        ) : (
+          <Tag>未知流程</Tag>
+        ),
     },
     {
       title: "当前节点",
@@ -103,6 +105,10 @@ const Approval: React.FC = () => {
       key: "currentNodeId",
       render: (text, record) => {
         if (record.status !== "running") return <Text type="secondary">-</Text>;
+
+        if (!record.definitionSnapshot) {
+          return <Text type="secondary">流程初始化中</Text>;
+        }
 
         const node = record.definitionSnapshot.nodes.find((n) => n.id === text);
         const role = node?.config?.approverRole;
@@ -161,8 +167,30 @@ const Approval: React.FC = () => {
                 style={{ color: "#52c41a" }}
                 icon={<CheckCircleOutlined />}
                 onClick={() => {
-                  approve(record.instanceId, userRole || "未知用户");
-                  message.success("已执行快速通过逻辑");
+                  try {
+                    const task = tasks.find(
+                      (t) =>
+                        t.instanceId === record.instanceId &&
+                        t.assigneeRole === userRole &&
+                        t.status === "pending"
+                    );
+
+                    if (!task) {
+                      message.error("未找到对应的待办任务，无法快速通过");
+                      return;
+                    }
+
+                    // 先把当前 task 标记为已审批（内部会做 currentNode 校验）
+                    approveTask(task.id);
+
+                    message.success("已通过审批并推进到下一节点");
+                  } catch (e) {
+                    if (e instanceof ApprovalGuardError) {
+                      message.error(e.message);
+                      return;
+                    }
+                    throw e;
+                  }
                 }}
               />
             </Tooltip>
@@ -173,7 +201,7 @@ const Approval: React.FC = () => {
   ];
 
   const getRoleTag = () => {
-    switch (currentUserKey) {
+    switch (userRole) {
       case "admin":
         return <Tag color="red">管理员 (Admin)</Tag>;
       case "manager":
@@ -186,6 +214,9 @@ const Approval: React.FC = () => {
         return <Tag color="geekblue">普通员工 ({userRole || "User"})</Tag>;
     }
   };
+
+  // 3) Permission guard: only hr or finance can see pending tab, else show empty alert
+  const hasPending = myPendingTasks.length > 0;
 
   return (
     <div style={{ padding: 24 }}>
@@ -206,62 +237,68 @@ const Approval: React.FC = () => {
           </div>
         </div>
 
-        <Tabs
-          defaultActiveKey="pending"
-          items={[
-            {
-              key: "pending",
-              label: (
-                <span>
-                  <ClockCircleOutlined />
-                  待我审批 ({pendingList.length})
-                </span>
-              ),
-              children: (
-                <Table
-                  dataSource={pendingList}
-                  columns={getColumns(false)}
-                  rowKey="instanceId"
-                  pagination={{ pageSize: 5 }}
-                  // ⭐ 提示：如果列表为空，增加明确的反馈引导
-                  locale={{
-                    emptyText: (
-                      <Empty
-                        description={
-                          <span>
-                            暂无待办任务 <br />
-                            <Text type="secondary" style={{ fontSize: 12 }}>
-                              提示：审批单仅在流程流转到【{userRole}
-                              】节点时才会显示。请检查流程配置的角色 ID 是否为 "
-                              {currentUserKey}"。
-                            </Text>
-                          </span>
-                        }
-                      />
-                    ),
-                  }}
-                />
-              ),
-            },
-            {
-              key: "history",
-              label: (
-                <span>
-                  <HistoryOutlined />
-                  审批历史
-                </span>
-              ),
-              children: (
-                <Table
-                  dataSource={historyList}
-                  columns={getColumns(true)}
-                  rowKey="instanceId"
-                  pagination={{ pageSize: 10 }}
-                />
-              ),
-            },
-          ]}
-        />
+        {hasPending ? (
+          <Tabs
+            defaultActiveKey="pending"
+            items={[
+              {
+                key: "pending",
+                label: (
+                  <span>
+                    <ClockCircleOutlined />
+                    待我审批 ({pendingList.length})
+                  </span>
+                ),
+                children: (
+                  <Table
+                    dataSource={pendingList}
+                    columns={getColumns(false)}
+                    rowKey="instanceId"
+                    pagination={{ pageSize: 5 }}
+                    // ⭐ 提示：如果列表为空，增加明确的反馈引导
+                    locale={{
+                      emptyText: (
+                        <Empty
+                          description={
+                            <span>
+                              暂无待办任务 <br />
+                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                提示：审批单仅在流程流转到【{userRole}
+                                】节点时才会显示。请检查流程配置的角色 ID 是否为
+                                "{userRole}"。
+                              </Text>
+                            </span>
+                          }
+                        />
+                      ),
+                    }}
+                  />
+                ),
+              },
+              {
+                key: "history",
+                label: (
+                  <span>
+                    <HistoryOutlined />
+                    审批历史
+                  </span>
+                ),
+                children: (
+                  <Table
+                    dataSource={historyList}
+                    columns={getColumns(true)}
+                    rowKey="instanceId"
+                    pagination={{ pageSize: 10 }}
+                  />
+                ),
+              },
+            ]}
+          />
+        ) : (
+          <div style={{ textAlign: "center", marginTop: 48 }}>
+            <Alert message="当前无审批权限 / 无待办任务" type="info" showIcon />
+          </div>
+        )}
       </Card>
     </div>
   );

@@ -2,7 +2,7 @@ import React from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { 
   Card, Typography, Button, Descriptions, Tag, Timeline, 
-  Space, Steps, Alert 
+  Space, Steps, Alert, message
 } from "antd";
 import { 
   ArrowLeftOutlined, 
@@ -13,6 +13,8 @@ import {
 
 import { useProcessInstanceStore } from "../../store/processInstanceStore";
 import { useAuthStore } from "../../store/useAuthStore";
+import { ApprovalGuardError } from "../../utils/guards";
+import { useTaskStore } from "../../store/taskStore";
 
 const { Title, Text } = Typography;
 
@@ -28,8 +30,11 @@ const ApprovalDetailPage: React.FC = () => {
     instanceId ? s.instances[instanceId] : undefined
   );
   
-  const approve = useProcessInstanceStore((s) => s.approve);
-  const reject = useProcessInstanceStore((s) => s.reject);
+  const approveTask = useTaskStore((s) => s.approveTask);
+  const rejectTask = useTaskStore((s) => s.rejectTask);
+
+  // ⭐ task 驱动：读取当前用户在该实例下的待办 task
+  const tasks = useTaskStore((s) => s.tasks);
 
   if (!instance) {
     return (
@@ -40,7 +45,25 @@ const ApprovalDetailPage: React.FC = () => {
     );
   }
 
+  if (!instance.definitionSnapshot) {
+    return (
+      <Alert
+        style={{ margin: 40 }}
+        message="审批单正在初始化中，请稍后刷新页面。"
+        type="info"
+        showIcon
+      />
+    );
+  }
+
   const formData = instance.formData || {};
+
+  const myPendingTask = tasks.find(
+    (t) =>
+      t.instanceId === instance.instanceId &&
+      t.assigneeRole === currentUserRole &&
+      t.status === "pending"
+  );
 
   // =========================================================
   // 🎨 可视化增强：构建支持进度展示的 Steps 数据 (已完成步骤同步)
@@ -72,7 +95,7 @@ const ApprovalDetailPage: React.FC = () => {
 
       let progressDesc = `审核人: ${node.config?.approverRole || '任意人员'}`;
       if (status === 'process') {
-        progressDesc = `${isMatchAll ? '会签' : '或签'}进度: ${processedCount}/${totalCount} 人已通过`;
+        progressDesc = `${isMatchAll ? '会签' : '或签'} 进度: ${processedCount}/${totalCount} 人已通过`;
       } else if (status === 'finish') {
         progressDesc = `已完成审批 (${processedCount}/${totalCount})`;
       }
@@ -93,19 +116,10 @@ const ApprovalDetailPage: React.FC = () => {
   // 是否发起人
   const isCreator = instance.createdBy === currentUserRole;
   
-  
-  // 统一转换对比 Key
-  const userRoleKey = currentUserRole?.trim().toLowerCase();
-
-  const record = instance.approvalRecords?.[instance.currentNodeId || ""];
-
   const canApprove =
     instance.status === "running" &&
     !isCreator &&
-    record &&
-    record.assignees.includes(userRoleKey || "") &&
-    !record.approvedBy.includes(userRoleKey || "") &&
-    !record.rejectedBy.includes(userRoleKey || "");
+    !!myPendingTask;
 
   return (
     <div style={{ padding: 24, background: "#f5f5f5", minHeight: "100vh" }}>
@@ -132,7 +146,21 @@ const ApprovalDetailPage: React.FC = () => {
                    danger 
                    size="large" 
                    icon={<CloseCircleOutlined />} 
-                   onClick={() => reject(instance.instanceId, currentUserRole || 'Admin')}
+                   onClick={() => {
+                     try {
+                       if (!myPendingTask) {
+                         message.error("未找到你的待办任务，无法执行审批操作");
+                         return;
+                       }
+                       rejectTask(myPendingTask.id);
+                     } catch (e) {
+                       if (e instanceof ApprovalGuardError) {
+                         message.error(e.message);
+                         return;
+                       }
+                       throw e;
+                     }
+                   }}
                  >
                    拒绝
                  </Button>
@@ -140,7 +168,21 @@ const ApprovalDetailPage: React.FC = () => {
                    type="primary" 
                    size="large" 
                    icon={<CheckCircleOutlined />} 
-                   onClick={() => approve(instance.instanceId, currentUserRole || 'Admin')}
+                   onClick={() => {
+                     try {
+                       if (!myPendingTask) {
+                         message.error("未找到你的待办任务，无法执行审批操作");
+                         return;
+                       }
+                       approveTask(myPendingTask.id);
+                     } catch (e) {
+                       if (e instanceof ApprovalGuardError) {
+                         message.error(e.message);
+                         return;
+                       }
+                       throw e;
+                     }
+                   }}
                  >
                    通过审批
                  </Button>
@@ -158,7 +200,7 @@ const ApprovalDetailPage: React.FC = () => {
           </div>
           
           {/* 如果有权限但还在等待他人会签，可以增加提示 */}
-          {canApprove && record?.mode === 'MATCH_ALL' && (
+          {canApprove && instance.approvalRecords?.[instance.currentNodeId || ""]?.mode === 'MATCH_ALL' && (
             <Alert 
               message="当前为会签模式，需要所有指定人员通过后流程才会流转。" 
               type="info" 
