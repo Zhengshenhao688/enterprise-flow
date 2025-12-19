@@ -10,7 +10,6 @@ export type NodeConfig = {
   // --- Phase 1 核心字段 ---
   approverRoles?: string[];
   approvalMode: ApprovalMode;   
-  processedUsers: string[];     // 运行时：已投通过票的用户ID
 };
 
 /** 流程节点定义 */

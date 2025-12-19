@@ -57,14 +57,6 @@ const Approval: React.FC = () => {
   // 1) Compute myPendingTasks: tasks assigned to current user role and pending
   // 2) Derive pendingList strictly from myPendingTasks mapping to instances
   // =========================================================
-  const myPendingTasks = useMemo(
-    () =>
-      tasks.filter(
-        (t) => t.assigneeRole === userRole && t.status === "pending"
-      ),
-    [tasks, userRole]
-  );
-
   const pendingList = useMemo(() => {
     // 1️⃣ 找到“我名下”的 pending task
     const myTasks = tasks.filter(
@@ -263,7 +255,7 @@ const Approval: React.FC = () => {
   };
 
   // 3) Permission guard: only hr or finance can see pending tab, else show empty alert
-  const hasPending = myPendingTasks.length > 0;
+  const hasPending = pendingList.length > 0;
 
   return (
     <div style={{ padding: 24 }}>
@@ -310,9 +302,7 @@ const Approval: React.FC = () => {
                             <span>
                               暂无待办任务 <br />
                               <Text type="secondary" style={{ fontSize: 12 }}>
-                                提示：审批单仅在流程流转到【{userRole}
-                                】节点时才会显示。请检查流程配置的角色 ID 是否为
-                                "{userRole}"。
+                                提示：当有审批任务分配给你时，该审批单才会显示。
                               </Text>
                             </span>
                           }

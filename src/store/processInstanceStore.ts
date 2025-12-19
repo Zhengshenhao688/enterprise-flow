@@ -29,9 +29,6 @@ export type ProcessInstance = {
   currentNodeId: string | null;
   status: InstanceStatus;
 
-  /** 当前节点待审批角色（仅 UI 使用，后续可删除） */
-  pendingApprovers: string[];
-
   /** ⭐ task 级会签记录（方案二核心） */
   approvalRecords: {
     [nodeId: string]: {
@@ -62,12 +59,6 @@ type ProcessInstanceStore = {
 
   getInstanceById: (instanceId: string) => ProcessInstance | undefined;
 
-  moveToNext: (instanceId: string, nextNodeId: string | null) => void;
-
-  /** ⚠️ 旧接口（Step 4 后会废弃） */
-  approve: (instanceId: string, operator?: string) => void;
-  reject: (instanceId: string, operator?: string) => void;
-
   /** ⭐ Step 3 新接口：task 驱动流程（占位版） */
   applyTaskAction: (params: {
     taskId: string;
@@ -93,18 +84,6 @@ function getNextNode(def: ProcessDefinition, nodeId: string | null) {
   return def.nodes.find((n) => n.id === edge.to.nodeId) || null;
 }
 
-function getPendingApproversFromNode(
-  node: ProcessDefinition["nodes"][number] | null
-): string[] {
-  if (!node || node.type !== "approval") return [];
-
-  if (Array.isArray(node.config.approverRoles) && node.config.approverRoles.length > 0) {
-    return node.config.approverRoles;
-  }
-
-  return node.config.approverRole ? [node.config.approverRole] : [];
-}
-
 // =====================
 // Store 实现
 // =====================
@@ -128,16 +107,15 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
         const now = Date.now();
 
         const firstNode = getNextNode(definition, startNode?.id || null);
-        const pendingApprovers = getPendingApproversFromNode(firstNode);
 
         const approvalRecords: ProcessInstance["approvalRecords"] = {};
 
         if (firstNode && firstNode.type === "approval") {
           const taskStore = useTaskStore.getState();
 
-          const tasks = pendingApprovers.map((role) =>
+          const tasks = firstNode.config.approverRoles?.map((role) =>
             taskStore.createTask(instanceId, firstNode.id, role as Role)
-          );
+          ) || (firstNode.config.approverRole ? [taskStore.createTask(instanceId, firstNode.id, firstNode.config.approverRole as Role)] : []);
 
           approvalRecords[firstNode.id] = {
             mode: firstNode.config.approvalMode,
@@ -153,7 +131,6 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
           processDefinitionId: definition.id,
           currentNodeId: firstNode ? firstNode.id : null,
           status: "running",
-          pendingApprovers,
           approvalRecords,
           createdBy: currentUserRole,
           definitionSnapshot: definition,
@@ -295,7 +272,6 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
 
             let newStatus: InstanceStatus = "running";
             let nextNodeId: string | null = null;
-            let pendingApprovers: string[] = [];
 
             const finalApprovalRecords = { ...nextApprovalRecords };
 
@@ -317,7 +293,6 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
                 )
               );
 
-              pendingApprovers = nextRoles;
               nextNodeId = nextNode.id;
 
               finalApprovalRecords[nextNode.id] = {
@@ -335,7 +310,6 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
                   ...instance,
                   status: newStatus,
                   currentNodeId: nextNodeId,
-                  pendingApprovers,
                   approvalRecords: finalApprovalRecords,
                   logs: [
                     ...instance.logs,
@@ -376,14 +350,6 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
         });
       },
 
-      // =====================
-      // 旧逻辑（暂时保留）
-      // =====================
-      approve: () => {},
-      reject: () => {},
-
-      moveToNext: () => {},
-
       appendLog: (instanceId, log) => {
         set((state) => {
           const instance = state.instances[instanceId];
@@ -411,7 +377,6 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
           processDefinitionId: definitionId,
           currentNodeId: startNodeId,
           status: "running",
-          pendingApprovers: [],
           approvalRecords: {},
           definitionSnapshot: null,
           createdBy: "user",
