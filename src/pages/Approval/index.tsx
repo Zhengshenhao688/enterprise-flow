@@ -23,11 +23,8 @@ import {
 } from "@ant-design/icons";
 
 import type { UserRole } from "../../store/useAuthStore";
-import type { Role } from "../../types/process";
-import {
-  useProcessInstanceStore,
-  type ProcessInstance,
-} from "../../store/processInstanceStore";
+import type { Role, ProcessInstance, Task } from "../../types/process";
+import { useProcessInstanceStore } from "../../store/processInstanceStore";
 import { useAuthStore } from "../../store/useAuthStore";
 import { useTaskStore } from "../../store/taskStore";
 import { ApprovalGuardError } from "../../utils/guards";
@@ -38,7 +35,7 @@ const Approval: React.FC = () => {
   const navigate = useNavigate();
 
   // 获取当前用户角色（保持原样，不做额外处理）
-  const userRole = useAuthStore((s) => s.role);
+  const userRole = useAuthStore((s) => s.role as Role);
 
   const instancesMap = useProcessInstanceStore((s) => s.instances);
   //const approveInstance = useProcessInstanceStore((s) => s.approve);
@@ -178,7 +175,7 @@ const Approval: React.FC = () => {
                 size="small"
                 onClick={() => {
                   const task = tasks.find(
-                    (t) =>
+                    (t: Task) =>
                       t.instanceId === record.instanceId &&
                       t.assigneeRole === userRole &&
                       t.status === "pending"
@@ -207,7 +204,7 @@ const Approval: React.FC = () => {
                   onClick={() => {
                     try {
                       const task = tasks.find(
-                        (t) =>
+                        (t: Task) =>
                           t.instanceId === record.instanceId &&
                           t.assigneeRole === userRole &&
                           t.status === "pending"

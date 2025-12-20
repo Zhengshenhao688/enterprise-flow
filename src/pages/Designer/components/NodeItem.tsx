@@ -1,6 +1,6 @@
 import React from "react";
 import { message, Tag } from "antd"; 
-import { UserOutlined, TeamOutlined } from "@ant-design/icons";
+import { UserOutlined, TeamOutlined, ForkOutlined } from "@ant-design/icons";
 import { useFlowStore, NODE_WIDTH, NODE_HEIGHT } from "../../../store/flowStore";
 import type { FlowNode, AnchorType } from "../../../types/flow";
 import "./nodeItem.css";
@@ -14,6 +14,7 @@ const NodeItem: React.FC<NodeItemProps> = ({ node }) => {
     connectState, startConnect, finishConnect 
   } = useFlowStore();
   const isSelected = selectedNodeId === node.id;
+  const isGateway = node.type === "gateway";
 
   // ✅ 核心修复：改写 if-else 消除 no-unused-expressions 报错 
   const handleAnchorMouseDown = (e: React.MouseEvent, anchor: AnchorType) => {
@@ -57,20 +58,37 @@ const NodeItem: React.FC<NodeItemProps> = ({ node }) => {
   };
 
   return (
-    <div 
-      className={`ef-node ${isSelected ? "is-selected" : ""}`}
-      style={{ left: node.position.x, top: node.position.y, width: NODE_WIDTH, height: NODE_HEIGHT }}
+    <div
+      className={`ef-node ${isSelected ? "is-selected" : ""} ${isGateway ? "is-gateway" : ""}`}
+      style={{
+        left: node.position.x,
+        top: node.position.y,
+        width: NODE_WIDTH,
+        height: NODE_HEIGHT,
+      }}
       onMouseDown={handleMouseDown}
     >
-      <div className="ef-node-label">{node.name}</div>
+      <div className="ef-node-label">
+        {isGateway ? (
+          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <ForkOutlined />
+            条件网关
+          </span>
+        ) : (
+          node.name
+        )}
+      </div>
 
-      {/* ✅ 核心修复：移除不存在的 size 属性  */}
-      {node.type === 'approval' && (
-        <div style={{ marginTop: 4, display: 'flex', justifyContent: 'center' }}>
-          {node.config?.approvalMode === 'MATCH_ALL' ? (
-            <Tag color="orange"><TeamOutlined /> 会签</Tag>
+      {node.type === "approval" && (
+        <div style={{ marginTop: 4, display: "flex", justifyContent: "center" }}>
+          {node.config?.approvalMode === "MATCH_ALL" ? (
+            <Tag color="orange">
+              <TeamOutlined /> 会签
+            </Tag>
           ) : (
-            <Tag color="blue"><UserOutlined /> 或签</Tag>
+            <Tag color="blue">
+              <UserOutlined /> 或签
+            </Tag>
           )}
         </div>
       )}

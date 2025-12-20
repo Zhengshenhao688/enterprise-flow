@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 import {useAuthStore} from "../../store/useAuthStore";
 import { useProcessInstanceStore } from "../../store/processInstanceStore";
-import type { ProcessInstance } from "../../store/processInstanceStore";
+import type { ProcessInstance } from "../../types/process";
 import type { FlowNode } from "../../types/flow";
 
 const { Text } = Typography;

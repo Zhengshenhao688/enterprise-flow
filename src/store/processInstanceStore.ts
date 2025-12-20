@@ -1,11 +1,16 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { ProcessDefinition } from "../types/flow";
+import type { ProcessDefinition, FlowNode } from "../types/flow";
 import type { Role } from "../types/process";
 import { useAuthStore } from "./useAuthStore";
-import type { UserRole } from "./useAuthStore";
+// import type { UserRole } from "./useAuthStore";
 import { useTaskStore } from "./taskStore";
+import type { FlowEdge } from "../types/flow";
+import { evaluateCondition } from "../utils/guards";
+import type { FormValue } from "../types/process";
+import { useFlowStore } from "./flowStore";
+import type { ProcessInstance } from "../types/process";
 
 // =====================
 // 审批日志
@@ -20,40 +25,15 @@ export type ApprovalLog = {
 export type InstanceStatus = "running" | "approved" | "rejected";
 
 // =====================
-// 流程实例（运行态数据）
-// =====================
-export type ProcessInstance = {
-  instanceId: string;
-  title: string;
-  processDefinitionId: string;
-  currentNodeId: string | null;
-  status: InstanceStatus;
-
-  /** ⭐ task 级会签记录（方案二核心） */
-  approvalRecords: {
-    [nodeId: string]: {
-      mode: "MATCH_ANY" | "MATCH_ALL";
-      taskIds: string[];
-      approvedTaskIds: string[];
-      rejectedTaskIds: string[];
-    };
-  };
-
-  definitionSnapshot: ProcessDefinition | null;
-  createdBy: UserRole;
-  createdAt: number;
-  formData?: Record<string, unknown>;
-  logs: ApprovalLog[];
-};
-
-// =====================
 // Store 类型
 // =====================
 type ProcessInstanceStore = {
   instances: Record<string, ProcessInstance>;
 
   startProcess: (
-    definition: ProcessDefinition,
+    params:
+      | { definitionId: string }
+      | { definitionKey: string; version: number },
     formData?: Record<string, unknown>
   ) => string;
 
@@ -77,11 +57,81 @@ type ProcessInstanceStore = {
 // =====================
 // 工具函数
 // =====================
-function getNextNode(def: ProcessDefinition, nodeId: string | null) {
+
+/**
+ * 规范化表单数据，仅保留 string/number/boolean/null 类型
+ */
+function normalizeFormData(
+  formData: Record<string, unknown>
+): Record<string, FormValue> {
+  const result: Record<string, FormValue> = {};
+  for (const [k, v] of Object.entries(formData)) {
+    if (
+      typeof v === "string" ||
+      typeof v === "number" ||
+      typeof v === "boolean" ||
+      v === null
+    ) {
+      result[k] = v;
+    }
+    // 其他类型（object/array/function/undefined）不进入条件上下文
+  }
+  return result;
+}
+function getNextNodeByRuntime(
+  def: ProcessDefinition,
+  nodeId: string | null,
+  context: { form: Record<string, FormValue> }
+) {
   if (!nodeId) return null;
-  const edge = def.edges.find((e) => e.from.nodeId === nodeId);
-  if (!edge) return null;
-  return def.nodes.find((n) => n.id === edge.to.nodeId) || null;
+
+  const outgoingEdges: FlowEdge[] = def.edges.filter(
+    (e) => e.from.nodeId === nodeId
+  );
+  if (outgoingEdges.length === 0) return null;
+
+  const currentNode = def.nodes.find((n) => n.id === nodeId);
+  if (!currentNode) return null;
+
+  // 普通节点：仍然按第一条边走（兼容你现在的实现）
+  if (currentNode.type !== "gateway") {
+    const edge = outgoingEdges[0];
+    return def.nodes.find((n) => n.id === edge.to.nodeId) || null;
+  }
+
+  // ===== XOR Gateway 核心逻辑 =====
+  // 1. 先找条件命中的边（非 default）
+  console.log("[gateway] evaluating edges", {
+    nodeId,
+    context,
+    outgoingEdges,
+  });
+
+  const matchedEdge = outgoingEdges.find((e) => {
+    const result = !e.isDefault && evaluateCondition(e.condition, context);
+    console.log("[gateway] check edge", {
+      edgeId: e.id,
+      condition: e.condition,
+      isDefault: e.isDefault,
+      result,
+    });
+    return result;
+  });
+
+  if (matchedEdge) {
+    console.log("[gateway] matchedEdge ->", matchedEdge.to.nodeId);
+    return def.nodes.find((n) => n.id === matchedEdge.to.nodeId) || null;
+  }
+
+  // 2. 找 default 边
+  const defaultEdge = outgoingEdges.find((e) => e.isDefault);
+  console.log("[gateway] defaultEdge ->", defaultEdge?.to.nodeId);
+  if (defaultEdge) {
+    return def.nodes.find((n) => n.id === defaultEdge.to.nodeId) || null;
+  }
+
+  // 3. 没有 default → 配置错误
+  throw new Error("条件网关缺少默认路径，请检查流程配置");
 }
 
 // =====================
@@ -95,27 +145,106 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
       // =====================
       // 发起流程
       // =====================
-      startProcess: (definition, formData = {}) => {
+      startProcess: (params, formData = {}) => {
+        console.log("[startProcess] called", {
+          params,
+          formData,
+        });
+        const { publishedFlows } = useFlowStore.getState();
+
+        let definition: ProcessDefinition | undefined;
+
+        // ===== 1️⃣ 精确查找流程定义（禁止默认 latest）=====
+        if ("definitionId" in params) {
+          definition = publishedFlows.find((f) => f.id === params.definitionId);
+        } else {
+          definition = publishedFlows.find(
+            (f) =>
+              f.definitionKey === params.definitionKey &&
+              f.version === params.version
+          );
+        }
+
+        if (!definition) {
+          throw new Error("未找到指定版本的流程定义，无法发起流程");
+        }
+
+        // ===== 2️⃣ 以下逻辑基本保持你原来的实现 =====
         const title =
           typeof formData.title === "string" && formData.title.trim()
             ? formData.title
             : definition.name;
 
-        const currentUserRole = useAuthStore.getState().role ?? "user";
+        const currentUserRole = (useAuthStore.getState().role ??
+          "user") as Role;
         const startNode = definition.nodes.find((n) => n.type === "start");
+        console.log("[startProcess] startNode", startNode);
         const instanceId = nanoid();
         const now = Date.now();
+        const normalizedForm = normalizeFormData(formData);
+        console.log("[startProcess] normalizedForm", normalizedForm);
 
-        const firstNode = getNextNode(definition, startNode?.id || null);
+        let firstNode = getNextNodeByRuntime(
+          definition,
+          startNode?.id || null,
+          { form: normalizedForm }
+        );
+
+        console.log("[startProcess] firstNode (raw)", {
+          id: firstNode?.id,
+          type: firstNode?.type,
+          name: firstNode?.name,
+        });
+
+        // ⭐ gateway 自动穿透（核心）
+        while (firstNode && firstNode.type === "gateway") {
+          console.log("[startProcess][gateway] evaluating", {
+            gatewayId: firstNode.id,
+          });
+
+          const next = getNextNodeByRuntime(definition, firstNode.id, {
+            form: normalizedForm,
+          });
+
+          if (!next) {
+            throw new Error("Gateway 未能计算出下一个节点，请检查条件或默认路径");
+          }
+
+          console.log("[startProcess][gateway] resolved ->", {
+            id: next.id,
+            type: next.type,
+            name: next.name,
+          });
+
+          firstNode = next;
+        }
+
+        console.log("[startProcess] firstNode (resolved)", {
+          id: firstNode?.id,
+          type: firstNode?.type,
+          name: firstNode?.name,
+        });
 
         const approvalRecords: ProcessInstance["approvalRecords"] = {};
 
         if (firstNode && firstNode.type === "approval") {
           const taskStore = useTaskStore.getState();
 
-          const tasks = firstNode.config.approverRoles?.map((role) =>
+          const roles = Array.isArray(firstNode.config.approverRoles)
+            ? firstNode.config.approverRoles
+            : firstNode.config.approverRole
+            ? [firstNode.config.approverRole]
+            : [];
+
+          console.log("[approval] entering approval node", {
+            nodeId: firstNode.id,
+            nodeName: firstNode.name,
+            approverRoles: roles,
+          });
+
+          const tasks = roles.map((role) =>
             taskStore.createTask(instanceId, firstNode.id, role as Role)
-          ) || (firstNode.config.approverRole ? [taskStore.createTask(instanceId, firstNode.id, firstNode.config.approverRole as Role)] : []);
+          );
 
           approvalRecords[firstNode.id] = {
             mode: firstNode.config.approvalMode,
@@ -125,17 +254,26 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
           };
         }
 
+        // ===== 1️⃣ definitionKey/definitionVersion 安全兜底 =====
+        const definitionKey = definition.definitionKey ?? definition.id;
+        const definitionVersion = definition.version ?? 1;
+
         const instance: ProcessInstance = {
           instanceId,
           title,
           processDefinitionId: definition.id,
+          definitionSnapshot: definition,
+          definitionKey,
+          definitionVersion,
           currentNodeId: firstNode ? firstNode.id : null,
           status: "running",
           approvalRecords,
           createdBy: currentUserRole,
-          definitionSnapshot: definition,
           createdAt: now,
           formData,
+          context: {
+            form: normalizedForm,
+          },
           logs: [
             {
               date: now,
@@ -222,9 +360,7 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
           // 5️⃣ 会签失败 → 整个流程 reject
           if (shouldReject) {
             // 关闭其余 task
-            const remainTaskIds = record.taskIds.filter(
-              (id) => id !== taskId
-            );
+            const remainTaskIds = record.taskIds.filter((id) => id !== taskId);
             taskStore.cancelTasks(remainTaskIds, "会签失败，流程终止");
 
             return {
@@ -257,18 +393,16 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
             );
             taskStore.cancelTasks(remainTaskIds, "会签已完成，任务自动关闭");
 
-            const nextNode = instance.definitionSnapshot
-              ? (() => {
-                  const edge = instance.definitionSnapshot.edges.find(
-                    (e) => e.from.nodeId === nodeId
-                  );
-                  return edge
-                    ? instance.definitionSnapshot.nodes.find(
-                        (n) => n.id === edge.to.nodeId
-                      ) || null
-                    : null;
-                })()
-              : null;
+            const def = instance.definitionSnapshot;
+            let nextNode: FlowNode | null = null;
+
+            if (def) {
+              const outgoing = def.edges.filter(e => e.from.nodeId === nodeId);
+              if (outgoing.length > 0) {
+                const edge = outgoing[0]; // approval 节点只能线性推进
+                nextNode = def.nodes.find(n => n.id === edge.to.nodeId) || null;
+              }
+            }
 
             let newStatus: InstanceStatus = "running";
             let nextNodeId: string | null = null;
@@ -277,13 +411,13 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
 
             if (!nextNode || nextNode.type === "end") {
               newStatus = "approved";
+              nextNodeId = null; // ⭐ 明确终止流程，防止继续串行
             } else if (nextNode.type === "approval") {
-              const nextRoles =
-                Array.isArray(nextNode.config.approverRoles)
-                  ? nextNode.config.approverRoles
-                  : nextNode.config.approverRole
-                  ? [nextNode.config.approverRole]
-                  : [];
+              const nextRoles = Array.isArray(nextNode.config.approverRoles)
+                ? nextNode.config.approverRoles
+                : nextNode.config.approverRole
+                ? [nextNode.config.approverRole]
+                : [];
 
               const tasks = nextRoles.map((role) =>
                 taskStore.createTask(
@@ -303,6 +437,7 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
               };
             }
 
+            // 不创建任何后续 task 当流程已终止（approved）
             return {
               instances: {
                 ...state.instances,
@@ -375,6 +510,10 @@ export const useProcessInstanceStore = create<ProcessInstanceStore>()(
           instanceId,
           title: "未命名流程",
           processDefinitionId: definitionId,
+
+          definitionKey: definitionId,
+          definitionVersion: 1,
+
           currentNodeId: startNodeId,
           status: "running",
           approvalRecords: {},

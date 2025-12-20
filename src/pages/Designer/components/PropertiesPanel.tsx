@@ -12,28 +12,111 @@ const ROLES = [
 ];
 
 const PropertiesPanel: React.FC = () => {
-  const { nodes, selectedNodeId, updateNode, processName, setProcessName } = useFlowStore();
+  const {
+    nodes,
+    edges,
+    selectedNodeId,
+    selectedEdgeId,
+    updateNode,
+    setEdgeCondition,
+    setDefaultEdge,
+    processName,
+    setProcessName,
+  } = useFlowStore();
   const node = nodes.find((n) => n.id === selectedNodeId);
+  const edge = edges.find((e) => e.id === selectedEdgeId);
 
-  const approverRoles =
-    node?.config?.approverRoles ??
-    (node?.config?.approverRole ? [node.config.approverRole] : []);
-
-  if (!node) {
+  // ① 既没有选中 node，也没有选中 edge → 全局配置
+  if (!node && !edge) {
     return (
       <Card title="全局配置">
         <div style={{ marginBottom: 16 }}>
           <div style={{ marginBottom: 8, fontWeight: 500 }}>流程名称：</div>
-          <Input 
-            value={processName} 
-            onChange={(e) => setProcessName(e.target.value)} 
-            showCount 
-            maxLength={20} 
+          <Input
+            value={processName}
+            onChange={(e) => setProcessName(e.target.value)}
+            showCount
+            maxLength={20}
             placeholder="例如：请假审批流"
           />
         </div>
       </Card>
     );
+  }
+
+  // ② 选中的是 Edge（且没有选中 Node）→ Edge 条件配置
+  if (!node && edge) {
+    const condition = edge.condition;
+
+    return (
+      <Card title="连线条件">
+        <Space direction="vertical" style={{ width: "100%" }} size="middle">
+          {/* 条件配置 */}
+          <div>
+            <div style={{ marginBottom: 8, fontWeight: 500 }}>条件表达式</div>
+            <Space>
+              <Input
+                placeholder="左值，如 form.amount"
+                value={condition?.left}
+                onChange={(e) =>
+                  setEdgeCondition(edge.id, {
+                    op: condition?.op ?? "eq",
+                    left: e.target.value,
+                    right: condition?.right ?? "",
+                  })
+                }
+              />
+              <Select
+                value={condition?.op ?? "eq"}
+                style={{ width: 90 }}
+                options={[
+                  { label: "=", value: "eq" },
+                  { label: ">", value: "gt" },
+                  { label: ">=", value: "gte" },
+                  { label: "<", value: "lt" },
+                  { label: "<=", value: "lte" },
+                ]}
+                onChange={(op) =>
+                  setEdgeCondition(edge.id, {
+                    op,
+                    left: condition?.left ?? "",
+                    right: condition?.right ?? "",
+                  })
+                }
+              />
+              <Input
+                placeholder="右值"
+                value={condition?.right}
+                onChange={(e) =>
+                  setEdgeCondition(edge.id, {
+                    op: condition?.op ?? "eq",
+                    left: condition?.left ?? "",
+                    right: e.target.value,
+                  })
+                }
+              />
+            </Space>
+          </div>
+
+          <Divider />
+
+          {/* 默认路径 */}
+          <div>
+            <Radio
+              checked={edge.isDefault}
+              onChange={() => setDefaultEdge(edge.from.nodeId, edge.id)}
+            >
+              设为默认路径（条件不满足时走这里）
+            </Radio>
+          </div>
+        </Space>
+      </Card>
+    );
+  }
+
+  // ③ 走到这里表示要渲染节点属性，但为了让 TS 明确 node 一定存在，做一次兜底
+  if (!node) {
+    return null;
   }
 
   return (
@@ -87,7 +170,10 @@ const PropertiesPanel: React.FC = () => {
               style={{ width: '100%' }}
               placeholder="请选择审批角色（可多选）"
               options={ROLES}
-              value={approverRoles}
+              value={
+                node?.config?.approverRoles ??
+                (node?.config?.approverRole ? [node.config.approverRole] : [])
+              }
               onChange={(values) =>
                 updateNode(node.id, {
                   config: {

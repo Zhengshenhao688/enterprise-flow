@@ -18,7 +18,6 @@ import { useFlowStore } from "../../store/flowStore";
 import { useProcessInstanceStore } from "../../store/processInstanceStore";
 import { useAuthStore } from "../../store/useAuthStore";
 
-
 const { Title, Paragraph, Text } = Typography;
 const { Content } = Layout;
 const { TextArea } = Input;
@@ -29,7 +28,6 @@ interface ApplyFormData extends Record<string, unknown> {
   title: string;
   reason: string;
 }
-
 
 const ApplyPage: React.FC = () => {
   const navigate = useNavigate();
@@ -56,12 +54,27 @@ const ApplyPage: React.FC = () => {
       return;
     }
 
+    if (!targetFlow.definitionKey || typeof targetFlow.version !== "number") {
+      message.error("流程定义不完整，请联系管理员重新发布流程");
+      return;
+    }
+
     setLoading(true);
     try {
       await new Promise((resolve) => setTimeout(resolve, 800));
 
-      // ✅ 启动流程（task 由运行态自动生成）
-      const instanceId = startProcess(targetFlow, values);
+      const instanceId = startProcess(
+        {
+          definitionKey: targetFlow.definitionKey,
+          version: targetFlow.version,
+        },
+        values
+      );
+
+      console.log(
+        "[instances after startProcess]",
+        Object.values(useProcessInstanceStore.getState().instances)
+      );
 
       message.success(`申请提交成功！(单号: ${instanceId})`);
 
@@ -86,9 +99,11 @@ const ApplyPage: React.FC = () => {
           .filter((n) => n.type === "approval")
           .map((n) => ({
             title: n.name,
-            description: Array.isArray(n.config?.approverRoles) && n.config.approverRoles.length > 0
-              ? `审核: ${n.config.approverRoles.join(" / ")}`
-              : n.config?.approverRole
+            description:
+              Array.isArray(n.config?.approverRoles) &&
+              n.config.approverRoles.length > 0
+                ? `审核: ${n.config.approverRoles.join(" / ")}`
+                : n.config?.approverRole
                 ? `审核: ${n.config.approverRole}`
                 : "审批节点",
           })),
@@ -176,6 +191,18 @@ const ApplyPage: React.FC = () => {
                       </Select.Option>
                     ))}
                   </Select>
+                </Form.Item>
+
+                <Form.Item
+                  label="金额（用于条件判断）"
+                  name="amount"
+                  rules={[{ required: true, message: "请输入金额" }]}
+                >
+                  <Input
+                    type="number"
+                    placeholder="例如：6000（>5000 走 HR，否则走默认）"
+                    size="large"
+                  />
                 </Form.Item>
 
                 <Form.Item

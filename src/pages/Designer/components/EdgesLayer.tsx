@@ -65,7 +65,13 @@ const EdgesLayer: React.FC<EdgesLayerProps> = ({ layer }) => {
         const pathData = getBezierPath(start, end);
 
         return (
-          <g key={edge.id}>
+          <g
+            key={edge.id}
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              setSelectedEdgeId(edge.id);
+            }}
+          >
              {/* 透明热区，用于点击 */}
              <path
                d={pathData}
@@ -73,10 +79,6 @@ const EdgesLayer: React.FC<EdgesLayerProps> = ({ layer }) => {
                strokeWidth={15}
                fill="none"
                style={{ cursor: "pointer", pointerEvents: "stroke" }}
-               onMouseDown={(e) => {
-                 e.stopPropagation();
-                 setSelectedEdgeId(edge.id);
-               }}
              />
              {/* 视觉线 */}
              <path

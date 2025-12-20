@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { message } from "antd";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { nanoid } from "nanoid";
 import type { Task, Role } from "../types/process";
@@ -99,7 +100,7 @@ export const useTaskStore = create<TaskState>()(
           currentNodeId: instance.currentNodeId,
         });
 
-        // 1️⃣ 标记 task 已完成
+        // 1️⃣ 先标记 task 已完成（若后续推进失败会回滚）
         set((state) => ({
           tasks: state.tasks.map((t) =>
             t.id === taskId ? { ...t, status: "approved" } : t
@@ -107,7 +108,25 @@ export const useTaskStore = create<TaskState>()(
         }));
 
         // 2️⃣ 通知 instanceStore（由它决定是否推进 / 是否会签完成）
-        instanceStore.applyTaskAction({ taskId, action: "approve", operator: task.assigneeRole });
+        // 如果推进失败（例如网关缺少默认路径），必须回滚任务状态，避免数据不一致
+        try {
+          instanceStore.applyTaskAction({
+            taskId,
+            action: "approve",
+            operator: task.assigneeRole,
+          });
+        } catch (err) {
+          // 回滚 task 状态
+          set((state) => ({
+            tasks: state.tasks.map((t) =>
+              t.id === taskId ? { ...t, status: "pending" } : t
+            ),
+          }));
+
+          const msg = err instanceof Error ? err.message : "审批推进失败";
+          console.error("[TaskStore.approveTask] applyTaskAction failed:", err);
+          message.error(msg);
+        }
       },
 
       rejectTask: (taskId) => {
@@ -126,7 +145,7 @@ export const useTaskStore = create<TaskState>()(
           currentNodeId: instance.currentNodeId,
         });
 
-        // 1️⃣ 更新 task 状态
+        // 1️⃣ 更新 task 状态（若后续推进失败会回滚）
         set((state) => ({
           tasks: state.tasks.map((t) =>
             t.id === taskId && t.status === "pending"
@@ -136,7 +155,25 @@ export const useTaskStore = create<TaskState>()(
         }));
 
         // 2️⃣ 推进拒绝逻辑（流程终止）
-        instanceStore.applyTaskAction({ taskId, action: "reject", operator: task.assigneeRole });
+        // 如果推进失败，同样需要回滚任务状态
+        try {
+          instanceStore.applyTaskAction({
+            taskId,
+            action: "reject",
+            operator: task.assigneeRole,
+          });
+        } catch (err) {
+          // 回滚 task 状态
+          set((state) => ({
+            tasks: state.tasks.map((t) =>
+              t.id === taskId ? { ...t, status: "pending" } : t
+            ),
+          }));
+
+          const msg = err instanceof Error ? err.message : "驳回推进失败";
+          console.error("[TaskStore.rejectTask] applyTaskAction failed:", err);
+          message.error(msg);
+        }
       },
 
       cancelTasks: (taskIds, reason) => {

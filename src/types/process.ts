@@ -4,6 +4,12 @@
  */
 
 /**
+ * 表单字段允许的基础类型
+ * 运行态条件判断只需要可比较的值
+ */
+export type FormValue = string | number | boolean | null;
+
+/**
  * 系统内角色类型
  * hr / finance 是审批角色
  * admin / user 用于系统权限（预留）
@@ -18,7 +24,7 @@ export type Role =
 /**
  * 流程节点类型
  */
-export type NodeType = 'start' | 'approval' | 'end';
+export type NodeType = 'start' | 'approval' | 'gateway' | 'end';
 
 /**
  * 流程节点（定义态）
@@ -71,19 +77,60 @@ export interface ProcessDefinition {
  */
 export interface ProcessInstance {
   /** 实例 ID */
-  id: string;
+  instanceId: string;
 
-  /** 关联的流程模板 ID */
-  definitionId: string;
+  /** 展示用标题 */
+  title: string;
 
-  /** 当前正在执行的节点 ID */
-  currentNodeId: string;
+  /** 具体流程定义版本的 ID */
+  processDefinitionId: string;
 
-  /** 流程实例状态 */
+  /** ⭐ 流程逻辑标识（同一流程系列） */
+  definitionKey: string;
+
+  /** ⭐ 实例绑定的流程版本号 */
+  definitionVersion: number;
+
+  /** 当前节点 */
+  currentNodeId: string | null;
+
+  /** 实例状态 */
   status: 'running' | 'approved' | 'rejected';
 
-  /** 创建时间（可选，便于列表展示） */
-  createdAt?: string;
+  /** 会签记录 */
+  approvalRecords: {
+    [nodeId: string]: {
+      mode: 'MATCH_ANY' | 'MATCH_ALL';
+      taskIds: string[];
+      approvedTaskIds: string[];
+      rejectedTaskIds: string[];
+    };
+  };
+
+  /** 冻结的流程定义快照 */
+  definitionSnapshot: import('./flow').ProcessDefinition | null;
+
+  /** 发起人角色 */
+  createdBy: import('./process').Role;
+
+  /** 创建时间 */
+  createdAt: number;
+
+  /** 原始表单数据（可选） */
+  formData?: Record<string, unknown>;
+
+  /** 运行时上下文（给条件网关用） */
+  context?: {
+    form: Record<string, FormValue>;
+  };
+
+  /** 审批日志 */
+  logs: {
+    date: number;
+    action: 'submit' | 'approve' | 'reject' | 'delegate';
+    operator: string;
+    comment?: string;
+  }[];
 }
 
 /**

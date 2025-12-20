@@ -15,6 +15,11 @@ const NODE_TYPES = [
     description: "常规审批、人事/财务审批等",
   },
   {
+    type: "gateway",
+    label: "条件网关",
+    description: "根据条件进行流程分支（XOR）",
+  },
+  {
     type: "end",
     label: "结束节点",
     description: "流程结束节点",

@@ -1,6 +1,6 @@
 import React from "react";
-import { Button, message, Typography, Space, Popconfirm, Select } from "antd";
-import { SaveOutlined, FileAddOutlined } from "@ant-design/icons";
+import { Button, message, Typography, Space, Select } from "antd";
+import { SaveOutlined } from "@ant-design/icons";
 import PropertiesPanel from "./components/PropertiesPanel";
 import NodePanel from "./components/NodePanel";
 import Canvas from "./components/Canvas";
@@ -16,6 +16,20 @@ const DesignerPage: React.FC = () => {
   
   // 🆕 获取校验方法
   const validateFlow = useFlowStore((s) => s.validateFlow);
+
+  // 🆕 新增 hooks
+  const editingMode = useFlowStore((s) => s.editingMode);
+  const processId = useFlowStore((s) => s.processId);
+  //const processName = useFlowStore((s) => s.processName);
+  const duplicatePublishedAsDraft = useFlowStore((s) => s.duplicatePublishedAsDraft);
+
+  // 🆕 派生当前流程版本信息
+  const currentPublished = publishedFlows.find(f => f.id === processId);
+
+  const currentVersionLabel =
+    currentPublished && currentPublished.version
+      ? `v${currentPublished.version}`
+      : null;
 
   const handlePublish = () => {
     // 1. 执行图逻辑校验 (BFS + 规则检查)
@@ -63,26 +77,51 @@ const DesignerPage: React.FC = () => {
              ))}
           </Select>
 
-          {/* 2. 新建流程 */}
-          <Popconfirm 
-            title="确定新建吗？" 
-            description="如果当前流程未发布，修改将会丢失。"
-            onConfirm={handleCreateNew}
-            okText="确定新建"
-            cancelText="取消"
-          >
-            <Button icon={<FileAddOutlined />}>新建</Button>
-          </Popconfirm>
-
-          {/* 3. 发布按钮 (主要操作) */}
-          <Button 
-            type="primary" 
-            size="large" 
-            icon={<SaveOutlined />} 
-            onClick={handlePublish}
-          >
-            发布 / 保存
+          <Button onClick={handleCreateNew}>
+            新建流程
           </Button>
+
+          {/* ========== 流程状态提示 ========== */}
+          {editingMode === "readonly" && currentVersionLabel && (
+            <Typography.Text type="secondary">
+              已发布版本 {currentVersionLabel}（只读）
+            </Typography.Text>
+          )}
+
+          {editingMode === "draft" && (
+            <Typography.Text type="warning">
+              草稿
+            </Typography.Text>
+          )}
+
+          {/* ========== 只读模式操作 ========== */}
+          {editingMode === "readonly" && (
+            <Button
+              type="primary"
+              onClick={() => {
+                if (!processId) return;
+                duplicatePublishedAsDraft(processId);
+                message.success("已基于当前版本创建草稿，可继续编辑");
+              }}
+            >
+              基于此版本创建草稿
+            </Button>
+          )}
+
+          {/* ========== 草稿模式操作 ========== */}
+          {editingMode === "draft" && (
+            <>
+              {/* 发布按钮 */}
+              <Button
+                type="primary"
+                size="large"
+                icon={<SaveOutlined />}
+                onClick={handlePublish}
+              >
+                发布为新版本
+              </Button>
+            </>
+          )}
         </Space>
       </div>
 
