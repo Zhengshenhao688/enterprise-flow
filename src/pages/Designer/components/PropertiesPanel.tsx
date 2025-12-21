@@ -1,6 +1,7 @@
-import React from 'react';
-import { Card, Input, Select, Radio, Space, Divider } from 'antd';
+import React, { useState } from 'react';
+import { Card, Input, InputNumber, Select, Radio, Space, Divider, Switch } from 'antd';
 import { useFlowStore } from '../../../store/flowStore';
+import { FIELD_CATALOG } from "../condition/fieldCatalog";
 //import type { ApprovalMode } from '../../../types/flow';
 
 // ⭐ 核心修复：角色 Value 统一全小写，确保全链路匹配 
@@ -23,6 +24,9 @@ const PropertiesPanel: React.FC = () => {
     processName,
     setProcessName,
   } = useFlowStore();
+
+  const [advanced, setAdvanced] = useState(false);
+
   const node = nodes.find((n) => n.id === selectedNodeId);
   const edge = edges.find((e) => e.id === selectedEdgeId);
 
@@ -46,7 +50,13 @@ const PropertiesPanel: React.FC = () => {
 
   // ② 选中的是 Edge（且没有选中 Node）→ Edge 条件配置
   if (!node && edge) {
+
     const condition = edge.condition;
+
+    const fieldMeta = FIELD_CATALOG.find(
+      (f) => f.path === condition?.left
+    );
+    const fieldType = fieldMeta?.type ?? "string";
 
     return (
       <Card title="连线条件">
@@ -54,47 +64,108 @@ const PropertiesPanel: React.FC = () => {
           {/* 条件配置 */}
           <div>
             <div style={{ marginBottom: 8, fontWeight: 500 }}>条件表达式</div>
-            <Space>
-              <Input
-                placeholder="左值，如 form.amount"
-                value={condition?.left}
-                onChange={(e) =>
-                  setEdgeCondition(edge.id, {
-                    op: condition?.op ?? "eq",
-                    left: e.target.value,
-                    right: condition?.right ?? "",
-                  })
-                }
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+              <Switch
+                checked={advanced}
+                onChange={setAdvanced}
+                checkedChildren="高级"
+                unCheckedChildren="简单"
               />
-              <Select
-                value={condition?.op ?? "eq"}
-                style={{ width: 90 }}
-                options={[
-                  { label: "=", value: "eq" },
-                  { label: ">", value: "gt" },
-                  { label: ">=", value: "gte" },
-                  { label: "<", value: "lt" },
-                  { label: "<=", value: "lte" },
-                ]}
-                onChange={(op) =>
-                  setEdgeCondition(edge.id, {
-                    op,
-                    left: condition?.left ?? "",
-                    right: condition?.right ?? "",
-                  })
-                }
-              />
-              <Input
-                placeholder="右值"
-                value={condition?.right}
-                onChange={(e) =>
-                  setEdgeCondition(edge.id, {
-                    op: condition?.op ?? "eq",
-                    left: condition?.left ?? "",
-                    right: e.target.value,
-                  })
-                }
-              />
+            </div>
+            <Space direction="vertical" style={{ width: "100%" }} size="small">
+              <div>
+                <div style={{ marginBottom: 4, fontWeight: 500 }}>字段</div>
+                {advanced ? (
+                  <Input
+                    style={{ width: "100%" }}
+                    placeholder="如：from.amount"
+                    value={condition?.left ?? ""}
+                    onChange={(e) =>
+                      setEdgeCondition(edge.id, {
+                        op: condition?.op ?? "eq",
+                        left: e.target.value,
+                        right: condition?.right ?? "",
+                      })
+                    }
+                  />
+                ) : (
+                  <Select
+                    style={{ width: "100%" }}
+                    placeholder="选择字段（如：金额）"
+                    options={FIELD_CATALOG.map((f) => ({
+                      label: f.label,
+                      value: f.path,
+                    }))}
+                    value={condition?.left}
+                    onChange={(v) =>
+                      setEdgeCondition(edge.id, {
+                        op: condition?.op ?? "eq",
+                        left: v,
+                        right: condition?.right ?? "",
+                      })
+                    }
+                  />
+                )}
+              </div>
+              <div>
+                <div style={{ marginBottom: 4, fontWeight: 500 }}>操作符</div>
+                <Select
+                  value={condition?.op ?? "eq"}
+                  style={{ width: 90 }}
+                  options={[
+                    { label: "=", value: "eq" },
+                    { label: ">", value: "gt" },
+                    { label: ">=", value: "gte" },
+                    { label: "<", value: "lt" },
+                    { label: "<=", value: "lte" },
+                  ]}
+                  onChange={(op) =>
+                    setEdgeCondition(edge.id, {
+                      op,
+                      left: condition?.left ?? "",
+                      right: condition?.right ?? "",
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <div style={{ marginBottom: 4, fontWeight: 500 }}>右值</div>
+                {fieldType === "number" ? (
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    placeholder="请输入数字"
+                    value={
+                      typeof condition?.right === "number"
+                        ? condition.right
+                        : undefined
+                    }
+                    onChange={(v) => {
+                      // antd InputNumber returns number | null; when cleared we remove the condition
+                      if (typeof v !== "number") {
+                        setEdgeCondition(edge.id, null);
+                        return;
+                      }
+                      setEdgeCondition(edge.id, {
+                        op: condition?.op ?? "eq",
+                        left: condition?.left ?? "",
+                        right: v,
+                      });
+                    }}
+                  />
+                ) : (
+                  <Input
+                    placeholder="右值"
+                    value={String(condition?.right ?? "")}
+                    onChange={(e) =>
+                      setEdgeCondition(edge.id, {
+                        op: condition?.op ?? "eq",
+                        left: condition?.left ?? "",
+                        right: e.target.value,
+                      })
+                    }
+                  />
+                )}
+              </div>
             </Space>
           </div>
 

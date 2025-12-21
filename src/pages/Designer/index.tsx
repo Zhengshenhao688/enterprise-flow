@@ -135,7 +135,7 @@ const DesignerPage: React.FC = () => {
         </div>
         
         {/* 右侧：属性面板 */}
-        <div style={{ width: 260 }}>
+        <div style={{ width: 280, minWidth: 280 }}>
           <PropertiesPanel />
         </div>
       </div>
