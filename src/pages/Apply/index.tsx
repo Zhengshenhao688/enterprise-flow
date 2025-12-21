@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 //import type { Role } from "../../types/process";
 import {
   Card,
@@ -17,6 +17,7 @@ import { useNavigate } from "react-router-dom";
 import { useFlowStore } from "../../store/flowStore";
 import { useProcessInstanceStore } from "../../store/processInstanceStore";
 import { useAuthStore } from "../../store/useAuthStore";
+import { buildApprovalPath } from "../../engine/approvalPath";
 
 const { Title, Paragraph, Text } = Typography;
 const { Content } = Layout;
@@ -29,9 +30,33 @@ interface ApplyFormData extends Record<string, unknown> {
   reason: string;
 }
 
+// 统一从已发布流程中读取 definitionSnapshot（最终版，支持 snapshot / 直接 definition）
+function getDefinitionSnapshot(
+  flow: unknown
+): import("../../engine/types").EngineFlowDefinition | null {
+  if (!flow || typeof flow !== "object") return null;
+
+  // ① 运行态快照（推荐）
+  if ("definitionSnapshot" in flow) {
+    const snap = (flow as { definitionSnapshot?: unknown }).definitionSnapshot;
+    if (snap) {
+      return snap as import("../../engine/types").EngineFlowDefinition;
+    }
+  }
+
+  // ② 直接就是 EngineFlowDefinition（nodes + edges）
+  if ("nodes" in flow && "edges" in flow) {
+    return flow as import("../../engine/types").EngineFlowDefinition;
+  }
+
+  return null;
+}
+
 const ApplyPage: React.FC = () => {
   const navigate = useNavigate();
   const [form] = Form.useForm();
+  // ✅ Step A1：实时监听金额变化
+  const watchedAmount = Form.useWatch("amount", form);
   const [loading, setLoading] = useState(false);
 
   const publishedFlows = useFlowStore((s) => s.publishedFlows);
@@ -71,11 +96,6 @@ const ApplyPage: React.FC = () => {
         values
       );
 
-      console.log(
-        "[instances after startProcess]",
-        Object.values(useProcessInstanceStore.getState().instances)
-      );
-
       message.success(`申请提交成功！(单号: ${instanceId})`);
 
       if (role === "user" || role === "admin") {
@@ -92,28 +112,67 @@ const ApplyPage: React.FC = () => {
   };
 
   const selectedFlow = publishedFlows.find((f) => f.id === selectedFlowId);
-  const previewSteps = selectedFlow
-    ? [
-        { title: "发起申请", status: "finish" as const },
-        ...selectedFlow.nodes
-          .filter((n) => n.type === "approval")
-          .map((n) => ({
-            title: n.name,
-            description:
-              Array.isArray(n.config?.approverRoles) &&
-              n.config.approverRoles.length > 0
-                ? `审核: ${n.config.approverRoles.join(" / ")}`
-                : n.config?.approverRole
-                ? `审核: ${n.config.approverRole}`
-                : "审批节点",
-          })),
-        { title: "流程结束", status: "wait" as const },
-      ]
-    : [
+
+
+  const previewSteps = useMemo(() => {
+    // ❌ 未选择流程
+    if (!selectedFlow) {
+      return [
         { title: "填写申请", description: "待开始" },
         { title: "选择流程", description: "请先选择业务类型" },
         { title: "审批结束", description: "..." },
       ];
+    }
+
+    const definitionSnapshot = getDefinitionSnapshot(selectedFlow);
+    if (!definitionSnapshot) {
+      console.warn("[Apply][definitionSnapshot] is null");
+      return [
+        { title: "发起申请", status: "finish" as const },
+        { title: "流程定义异常", status: "wait" as const },
+      ];
+    }
+
+    const hasGateway = definitionSnapshot.nodes.some(
+      (n) => n.type === "gateway"
+    );
+
+    const hasConditionEdge = definitionSnapshot.edges.some(
+      (e) => !!e.condition
+    );
+
+    const needConditionInput = hasGateway && hasConditionEdge;
+
+    if (needConditionInput) {
+      if (
+        watchedAmount === undefined ||
+        watchedAmount === null ||
+        watchedAmount === ""
+      ) {
+        return "NEED_CONDITION_INPUT";
+      }
+    }
+
+    // ✅ Step A2：使用运行态路径（runtime path）
+    const amount = Number(watchedAmount ?? 0);
+    const ctx = {
+      form: {
+        ...form.getFieldsValue(),
+        amount,
+      },
+    };
+
+    const path = buildApprovalPath(definitionSnapshot, ctx);
+
+    return [
+      { title: "发起申请", status: "finish" as const },
+      ...path.map((node) => ({
+        title: node.label,
+        status: "wait" as const,
+      })),
+      { title: "流程结束", status: "wait" as const },
+    ];
+  }, [selectedFlow, watchedAmount, form]);
 
   return (
     <Layout style={{ minHeight: "100vh", background: "#f5f5f5" }}>
@@ -166,13 +225,15 @@ const ApplyPage: React.FC = () => {
               >
                 <Form.Item
                   label="选择审批流程"
+                  name="flowId"
                   required
                   tooltip="请选择您要办理的业务类型，不同类型对应不同的审批人"
                 >
                   <Select
                     size="large"
                     placeholder="请选择业务类型（如：请假、报销...）"
-                    onChange={(val) => setSelectedFlowId(val)}
+                    value={selectedFlowId}
+                    onChange={(val: string) => setSelectedFlowId(val)}
                     notFoundContent={
                       <Empty description="暂无已发布的流程，请联系管理员发布模板" />
                     }
@@ -193,17 +254,35 @@ const ApplyPage: React.FC = () => {
                   </Select>
                 </Form.Item>
 
-                <Form.Item
-                  label="金额（用于条件判断）"
-                  name="amount"
-                  rules={[{ required: true, message: "请输入金额" }]}
-                >
-                  <Input
-                    type="number"
-                    placeholder="例如：6000（>5000 走 HR，否则走默认）"
-                    size="large"
-                  />
-                </Form.Item>
+                {(() => {
+                  const definitionSnapshot = selectedFlow
+                    ? getDefinitionSnapshot(selectedFlow)
+                    : null;
+
+                  const hasGateway =
+                    definitionSnapshot?.nodes?.some((n) => n.type === "gateway") ?? false;
+
+                  const hasConditionEdge =
+                    definitionSnapshot?.edges?.some((e) => !!e.condition) ?? false;
+
+                  const needConditionInput = hasGateway && hasConditionEdge;
+
+                  if (!needConditionInput) return null;
+
+                  return (
+                    <Form.Item
+                      label="金额（用于条件判断）"
+                      name="amount"
+                      rules={[{ required: true, message: "请输入金额" }]}
+                    >
+                      <Input
+                        type="number"
+                        placeholder="例如：6000（>5000 走 HR，否则走默认）"
+                        size="large"
+                      />
+                    </Form.Item>
+                  );
+                })()}
 
                 <Form.Item
                   label="申请标题"
@@ -244,7 +323,7 @@ const ApplyPage: React.FC = () => {
           <div style={{ width: 340 }}>
             <Card title="审批流预览" variant="outlined">
               {selectedFlowId ? (
-                <div>
+                <>
                   <div style={{ marginBottom: 16 }}>
                     <Text type="secondary">即将发起的流程：</Text>
                     <br />
@@ -252,13 +331,20 @@ const ApplyPage: React.FC = () => {
                       {selectedFlow?.name}
                     </Text>
                   </div>
-                  <Steps
-                    orientation="vertical"
-                    size="small"
-                    current={0}
-                    items={previewSteps}
-                  />
-                </div>
+                  {previewSteps === "NEED_CONDITION_INPUT" ? (
+                    <Empty
+                      description="请输入金额以预览审批流程"
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    />
+                  ) : Array.isArray(previewSteps) ? (
+                    <Steps
+                      orientation="vertical"
+                      size="small"
+                      current={0}
+                      items={previewSteps}
+                    />
+                  ) : null}
+                </>
               ) : (
                 <Empty
                   description="请先在左侧选择流程"

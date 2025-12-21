@@ -1,39 +1,51 @@
 // src/engine/conditionEvaluator.ts
 import type { ConditionExpr, FormContext } from "./types";
 
-function getByPath(obj: unknown, path: string): unknown {
-  return path.split(".").reduce((acc, key) => {
-    if (acc && typeof acc === "object") {
-      return (acc as Record<string, unknown>)[key];
-    }
-    return undefined;
-  }, obj);
-}
+function getValue(path: string, ctx: FormContext): unknown {
+  const form = ctx.form;
 
-function toComparable(v: unknown): string | number | boolean | null {
-  if (v == null) return null;
-  if (typeof v === "number" || typeof v === "boolean") return v;
-  if (typeof v === "string") {
-    const n = Number(v);
-    return Number.isNaN(n) ? v : n;
+  // 支持 "amount"
+  if (path in form) {
+    return (form as Record<string, unknown>)[path];
   }
-  return String(v);
+
+  // 支持 "form.amount"
+  if (path.startsWith("form.")) {
+    const key = path.slice("form.".length);
+    return (form as Record<string, unknown>)[key];
+  }
+
+  return undefined;
 }
 
 export function evaluateCondition(
-  condition: ConditionExpr,
-  context: FormContext
+  expr: ConditionExpr,
+  ctx: FormContext
 ): boolean {
-  const l = toComparable(getByPath(context, condition.left));
-  const r = toComparable(condition.right);
+  const left = getValue(expr.left, ctx);
+  const right = expr.right;
 
-  switch (condition.op) {
-    case "gt": return Number(l) > Number(r);
-    case "gte": return Number(l) >= Number(r);
-    case "lt": return Number(l) < Number(r);
-    case "lte": return Number(l) <= Number(r);
-    case "eq": return l === r;
-    case "neq": return l !== r;
-    default: return false;
+  // 防御：取不到值直接 false
+  if (left === undefined) {
+    console.warn("[conditionEvaluator] left value not found", expr, ctx);
+    return false;
+  }
+
+  switch (expr.op) {
+    case "gt":
+      return Number(left) > Number(right);
+    case "gte":
+      return Number(left) >= Number(right);
+    case "lt":
+      return Number(left) < Number(right);
+    case "lte":
+      return Number(left) <= Number(right);
+    case "eq":
+      return left === right;
+    case "neq":
+      return left !== right;
+    default:
+      console.warn("[conditionEvaluator] unknown op", expr.op);
+      return false;
   }
 }
