@@ -125,17 +125,42 @@ const DesignerPage: React.FC = () => {
         </Space>
       </div>
 
-      <div style={{ display: "flex", gap: 16, flex: 1, minHeight: 0 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "240px 1fr 300px",
+          gap: 16,
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
         {/* 左侧：节点面板 */}
-        <NodePanel />
-        
+        <div style={{ height: "100%", overflow: "auto" }}>
+          <NodePanel />
+        </div>
+
         {/* 中间：画布 */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <div
+          style={{
+            background: "#fff",
+            borderRadius: 8,
+            boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
           <Canvas />
         </div>
-        
+
         {/* 右侧：属性面板 */}
-        <div style={{ width: 280, minWidth: 280 }}>
+        <div
+          style={{
+            height: "100%",
+            position: "sticky",
+            top: 16,
+          }}
+        >
           <PropertiesPanel />
         </div>
       </div>
