@@ -1,181 +1,35 @@
-import React, { useState, useMemo } from "react";
-//import type { Role } from "../../types/process";
-import {
-  Card,
-  Typography,
-  Layout,
-  Button,
-  Form,
-  Input,
-  message,
-  Steps,
-  Select,
-  Empty,
-  Tag,
-} from "antd";
-import { useNavigate } from "react-router-dom";
-import { useFlowStore } from "../../store/flowStore";
-import { useProcessInstanceStore } from "../../store/processInstanceStore";
-import { useAuthStore } from "../../store/useAuthStore";
-import { buildApprovalPath } from "../../engine/approvalPath";
+import React from "react";
+import { Layout, Typography } from "antd";
 
-const { Title, Paragraph, Text } = Typography;
+import { useApply } from "./useApply";
+import ApplyForm from "./components/ApplyForm";
+import FlowPreview from "./components/ApprovalPreview";
+
+const { Title, Paragraph } = Typography;
 const { Content } = Layout;
-const { TextArea } = Input;
 
-// ✅ 修复点：添加 [key: string]: any 索引签名
-// 这告诉 TypeScript：这个对象除了 title/reason，还可以当做普通对象来处理
-interface ApplyFormData extends Record<string, unknown> {
-  title: string;
-  reason: string;
-}
-
-// 统一从已发布流程中读取 definitionSnapshot（最终版，支持 snapshot / 直接 definition）
-function getDefinitionSnapshot(
-  flow: unknown
-): import("../../engine/types").EngineFlowDefinition | null {
-  if (!flow || typeof flow !== "object") return null;
-
-  // ① 运行态快照（推荐）
-  if ("definitionSnapshot" in flow) {
-    const snap = (flow as { definitionSnapshot?: unknown }).definitionSnapshot;
-    if (snap) {
-      return snap as import("../../engine/types").EngineFlowDefinition;
-    }
-  }
-
-  // ② 直接就是 EngineFlowDefinition（nodes + edges）
-  if ("nodes" in flow && "edges" in flow) {
-    return flow as import("../../engine/types").EngineFlowDefinition;
-  }
-
-  return null;
-}
-
+/**
+ * ApplyPage
+ * - 页面级容器
+ * - 只负责 layout + 组件编排
+ * - ❌ 不包含任何业务逻辑
+ */
 const ApplyPage: React.FC = () => {
-  const navigate = useNavigate();
-  const [form] = Form.useForm();
-  // ✅ Step A1：实时监听金额变化
-  const watchedAmount = Form.useWatch("amount", form);
-  const [loading, setLoading] = useState(false);
+  const {
+    form,
+    publishedFlows,
 
-  const publishedFlows = useFlowStore((s) => s.publishedFlows);
-  const startProcess = useProcessInstanceStore((s) => s.startProcess);
+    selectedFlowId,
+    setSelectedFlowId,
 
-  const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
-
-  const role = useAuthStore((s) => s.role) || "user";
-
-  const onFinish = async (values: ApplyFormData) => {
-    if (!selectedFlowId) {
-      message.error("请先选择一个审批流程类型！");
-      return;
-    }
-
-    const targetFlow = publishedFlows.find((f) => f.id === selectedFlowId);
-
-    if (!targetFlow) {
-      message.error("未找到该流程模板，可能已被删除");
-      return;
-    }
-
-    if (!targetFlow.definitionKey || typeof targetFlow.version !== "number") {
-      message.error("流程定义不完整，请联系管理员重新发布流程");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-
-      const instanceId = startProcess(
-        {
-          definitionKey: targetFlow.definitionKey,
-          version: targetFlow.version,
-        },
-        values
-      );
-
-      message.success(`申请提交成功！(单号: ${instanceId})`);
-
-      if (role === "user" || role === "admin") {
-        navigate("/my-applications");
-      } else {
-        navigate("/approval");
-      }
-    } catch (error) {
-      message.error("流程发起失败");
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const selectedFlow = publishedFlows.find((f) => f.id === selectedFlowId);
-
-
-  const previewSteps = useMemo(() => {
-    // ❌ 未选择流程
-    if (!selectedFlow) {
-      return [
-        { title: "填写申请", description: "待开始" },
-        { title: "选择流程", description: "请先选择业务类型" },
-        { title: "审批结束", description: "..." },
-      ];
-    }
-
-    const definitionSnapshot = getDefinitionSnapshot(selectedFlow);
-    if (!definitionSnapshot) {
-      console.warn("[Apply][definitionSnapshot] is null");
-      return [
-        { title: "发起申请", status: "finish" as const },
-        { title: "流程定义异常", status: "wait" as const },
-      ];
-    }
-
-    const hasGateway = definitionSnapshot.nodes.some(
-      (n) => n.type === "gateway"
-    );
-
-    const hasConditionEdge = definitionSnapshot.edges.some(
-      (e) => !!e.condition
-    );
-
-    const needConditionInput = hasGateway && hasConditionEdge;
-
-    if (needConditionInput) {
-      if (
-        watchedAmount === undefined ||
-        watchedAmount === null ||
-        watchedAmount === ""
-      ) {
-        return "NEED_CONDITION_INPUT";
-      }
-    }
-
-    // ✅ Step A2：使用运行态路径（runtime path）
-    const amount = Number(watchedAmount ?? 0);
-    const ctx = {
-      form: {
-        ...form.getFieldsValue(),
-        amount,
-      },
-    };
-
-    const path = buildApprovalPath(definitionSnapshot, ctx);
-
-    return [
-      { title: "发起申请", status: "finish" as const },
-      ...path.map((node) => ({
-        title: node.label,
-        status: "wait" as const,
-      })),
-      { title: "流程结束", status: "wait" as const },
-    ];
-  }, [selectedFlow, watchedAmount, form]);
+    selectedFlow,
+    previewSteps,
+    needAmountInput,
+  } = useApply();
 
   return (
     <Layout style={{ minHeight: "100vh", background: "#f5f5f5" }}>
+      {/* Header */}
       <div
         style={{
           background: "#fff",
@@ -206,6 +60,7 @@ const ApplyPage: React.FC = () => {
           padding: "0 24px",
         }}
       >
+        {/* 页面说明 */}
         <div style={{ marginBottom: 24 }}>
           <Title level={2}>员工发起申请</Title>
           <Paragraph type="secondary">
@@ -214,144 +69,26 @@ const ApplyPage: React.FC = () => {
         </div>
 
         <div style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
-          {/* 左侧：表单区 */}
+          {/* 左侧：申请表单 */}
           <div style={{ flex: 1 }}>
-            <Card title="业务申请单" variant="outlined">
-              <Form
-                form={form}
-                layout="vertical"
-                onFinish={onFinish}
-                initialValues={{ title: "", reason: "" }}
-              >
-                <Form.Item
-                  label="选择审批流程"
-                  name="flowId"
-                  required
-                  tooltip="请选择您要办理的业务类型，不同类型对应不同的审批人"
-                >
-                  <Select
-                    size="large"
-                    placeholder="请选择业务类型（如：请假、报销...）"
-                    value={selectedFlowId}
-                    onChange={(val: string) => setSelectedFlowId(val)}
-                    notFoundContent={
-                      <Empty description="暂无已发布的流程，请联系管理员发布模板" />
-                    }
-                  >
-                    {publishedFlows.map((flow) => (
-                      <Select.Option key={flow.id} value={flow.id}>
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                          }}
-                        >
-                          <span>{flow.name}</span>
-                          <Tag>{flow.nodes.length} 个节点</Tag>
-                        </div>
-                      </Select.Option>
-                    ))}
-                  </Select>
-                </Form.Item>
-
-                {(() => {
-                  const definitionSnapshot = selectedFlow
-                    ? getDefinitionSnapshot(selectedFlow)
-                    : null;
-
-                  const hasGateway =
-                    definitionSnapshot?.nodes?.some((n) => n.type === "gateway") ?? false;
-
-                  const hasConditionEdge =
-                    definitionSnapshot?.edges?.some((e) => !!e.condition) ?? false;
-
-                  const needConditionInput = hasGateway && hasConditionEdge;
-
-                  if (!needConditionInput) return null;
-
-                  return (
-                    <Form.Item
-                      label="金额（用于条件判断）"
-                      name="amount"
-                      rules={[{ required: true, message: "请输入金额" }]}
-                    >
-                      <Input
-                        type="number"
-                        placeholder="例如：6000（>5000 走 HR，否则走默认）"
-                        size="large"
-                      />
-                    </Form.Item>
-                  );
-                })()}
-
-                <Form.Item
-                  label="申请标题"
-                  name="title"
-                  rules={[{ required: true, message: "请输入申请标题" }]}
-                >
-                  <Input
-                    placeholder="例如：采购办公用品 / 申请年假"
-                    size="large"
-                  />
-                </Form.Item>
-
-                <Form.Item
-                  label="申请事由 / 备注"
-                  name="reason"
-                  rules={[{ required: true, message: "请填写具体事由" }]}
-                >
-                  <TextArea rows={6} placeholder="请详细描述您的申请原因..." />
-                </Form.Item>
-
-                <Form.Item>
-                  <Button
-                    type="primary"
-                    htmlType="submit"
-                    size="large"
-                    block
-                    loading={loading}
-                    disabled={!selectedFlowId}
-                  >
-                    🚀 立即提交申请
-                  </Button>
-                </Form.Item>
-              </Form>
-            </Card>
+            <ApplyForm
+              publishedFlows={publishedFlows}
+              selectedFlowId={selectedFlowId}
+              needAmountInput={needAmountInput}
+              onSelectFlow={setSelectedFlowId}
+              form={form}
+              onSubmitSuccess={() => {
+                /* 跳转已在 ApplyForm 内处理，这里不关心 */
+              }}
+            />
           </div>
 
-          {/* 右侧：动态预览区 */}
+          {/* 右侧：审批流预览 */}
           <div style={{ width: 340 }}>
-            <Card title="审批流预览" variant="outlined">
-              {selectedFlowId ? (
-                <>
-                  <div style={{ marginBottom: 16 }}>
-                    <Text type="secondary">即将发起的流程：</Text>
-                    <br />
-                    <Text strong style={{ fontSize: 16 }}>
-                      {selectedFlow?.name}
-                    </Text>
-                  </div>
-                  {previewSteps === "NEED_CONDITION_INPUT" ? (
-                    <Empty
-                      description="请输入金额以预览审批流程"
-                      image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    />
-                  ) : Array.isArray(previewSteps) ? (
-                    <Steps
-                      orientation="vertical"
-                      size="small"
-                      current={0}
-                      items={previewSteps}
-                    />
-                  ) : null}
-                </>
-              ) : (
-                <Empty
-                  description="请先在左侧选择流程"
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                />
-              )}
-            </Card>
+            <FlowPreview
+              flowName={selectedFlow?.name}
+              previewSteps={previewSteps}
+            />
           </div>
         </div>
       </Content>

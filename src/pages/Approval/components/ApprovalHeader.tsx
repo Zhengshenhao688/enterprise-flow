@@ -1,6 +1,6 @@
 import React from "react";
 import { Typography, Tag } from "antd";
-import type { Role } from "../../types/process";
+import type { Role } from "../../../types/process";
 
 const { Title, Text } = Typography;
 

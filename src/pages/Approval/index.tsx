@@ -1,9 +1,9 @@
 import React from "react";
 import { Card } from "antd";
 
-import ApprovalHeader from "./ApprovalHeader";
-import ApprovalTabs from "./ApprovalTabs";
-import DelegateModal from "./DelegateModal";
+import ApprovalHeader from "./components/ApprovalHeader";
+import ApprovalTabs from "./components/ApprovalTabs";
+import DelegateModal from "./components/DelegateModal";
 import { useApproval } from "./useApproval";
 
 const Approval: React.FC = () => {

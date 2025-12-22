@@ -17,7 +17,7 @@ import {
   HistoryOutlined,
 } from "@ant-design/icons";
 
-import type { ProcessInstance } from "../../types/process";
+import type { ProcessInstance } from "../../../types/process";
 
 const { Text } = Typography;
 

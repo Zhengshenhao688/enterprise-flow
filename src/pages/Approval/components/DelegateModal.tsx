@@ -1,6 +1,6 @@
 import React from "react";
 import { Modal, Select, message } from "antd";
-import type { UserRole } from "../../store/useAuthStore";
+import type { UserRole } from "../../../store/useAuthStore";
 
 interface DelegateModalProps {
   open: boolean;
