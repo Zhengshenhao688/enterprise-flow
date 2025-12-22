@@ -7,7 +7,7 @@ import { useAuthStore } from "./useAuthStore";
 // import type { UserRole } from "./useAuthStore";
 import { useTaskStore } from "./taskStore";
 import type { FlowEdge } from "../types/flow";
-import { evaluateCondition } from "../utils/guards";
+import { evaluateCondition } from "@project/utils";
 import type { FormValue } from "../types/process";
 import { useFlowStore } from "./flowStore";
 import type { ProcessInstance } from "../types/process";

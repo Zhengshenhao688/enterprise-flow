@@ -1,5 +1,5 @@
-import type { ConditionExpr } from '../types/flow';
-import type { FormValue } from '../types/process';
+import type { ConditionExpr } from './types/flow';
+import type { FormValue } from './types/process';
 export class ApprovalGuardError extends Error {
   constructor(message: string) {
     super(message);

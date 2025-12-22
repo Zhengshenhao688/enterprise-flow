@@ -4,7 +4,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { nanoid } from "nanoid";
 import type { Task, Role } from "../types/process";
 import { useProcessInstanceStore } from "./processInstanceStore";
-import { assertTaskAtCurrentNode } from "../utils/guards";
+import { assertTaskAtCurrentNode } from "@project/utils";
 
 interface TaskState {
   tasks: Task[];

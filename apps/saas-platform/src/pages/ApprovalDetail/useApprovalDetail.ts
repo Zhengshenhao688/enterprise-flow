@@ -6,7 +6,7 @@ import type { StepsProps, TimelineProps } from "antd";
 import { useProcessInstanceStore } from "../../store/processInstanceStore";
 import { useAuthStore } from "../../store/useAuthStore";
 import { useTaskStore } from "../../store/taskStore";
-import { ApprovalGuardError } from "../../utils/guards";
+import { ApprovalGuardError } from "@project/utils";
 import type { Role } from "../../types/process";
 
 /**

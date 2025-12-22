@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { validateFlow as validateFlowUtil } from "../utils/flowValidate";
+import { validateFlow as validateFlowUtil } from "@project/utils";
 
 // ✅ 核心修复：使用 import type 解决 verbatimModuleSyntax 报错
 import type {

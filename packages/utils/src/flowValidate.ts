@@ -1,5 +1,4 @@
-// src/utils/flowValidate.ts
-import type { ProcessDefinition } from "../types/flow";
+import type { ProcessDefinition } from "./types/flow";
 
 export type ValidateResult = {
   success: boolean;

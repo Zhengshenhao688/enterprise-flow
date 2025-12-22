@@ -7,7 +7,7 @@ import type { Role, ProcessInstance, Task } from "../../types/process";
 import { useAuthStore } from "../../store/useAuthStore";
 import { useProcessInstanceStore } from "../../store/processInstanceStore";
 import { useTaskStore } from "../../store/taskStore";
-import { ApprovalGuardError } from "../../utils/guards";
+import { ApprovalGuardError } from "@project/utils";
 
 export function useApproval() {
   const navigate = useNavigate();
