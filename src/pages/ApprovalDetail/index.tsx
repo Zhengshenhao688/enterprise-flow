@@ -1,8 +1,10 @@
 import React from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Alert, Spin, Space } from "antd";
+import { Alert, Spin } from "antd";
 
 import { useApprovalDetail } from "./useApprovalDetail";
+import ApprovalDetailLayout from "./ApprovalDetailLayout";
+
 import ApprovalHeader from "./components/ApprovalHeader";
 import ApprovalSteps from "./components/ApprovalSteps";
 import ApprovalForm from "./components/ApprovalForm";
@@ -61,8 +63,8 @@ const ApprovalDetailPage: React.FC = () => {
   }
 
   return (
-    <div style={{ padding: 24, background: "#f5f5f5", minHeight: "100vh" }}>
-      <Space direction="vertical" size="large" style={{ width: "100%" }}>
+    <ApprovalDetailLayout
+      header={
         <ApprovalHeader
           title={(formData?.title as string) || "无标题申请"}
           status={instance.status}
@@ -73,24 +75,25 @@ const ApprovalDetailPage: React.FC = () => {
           onApprove={handlers.onApprove}
           onReject={handlers.onReject}
         />
-
+      }
+      steps={
         <ApprovalSteps
           currentStep={currentStep}
           stepItems={stepItems}
         />
-
-        <div style={{ display: "flex", gap: 24 }}>
-          <ApprovalForm
-            formData={formData}
-            createdAt={instance.createdAt}
-          />
-
-          <ApprovalTimeline
-            timelineItems={timelineItems}
-          />
-        </div>
-      </Space>
-    </div>
+      }
+      form={
+        <ApprovalForm
+          formData={formData}
+          createdAt={instance.createdAt}
+        />
+      }
+      timeline={
+        <ApprovalTimeline
+          timelineItems={timelineItems}
+        />
+      }
+    />
   );
 };
 
