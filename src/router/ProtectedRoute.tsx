@@ -2,8 +2,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { Button, Result } from 'antd';
 import type { ReactNode } from 'react';
-
-type Role = 'admin' | 'user';
+import type { Role } from '../types/process';
 
 interface Props {
   children: ReactNode;
@@ -12,7 +11,7 @@ interface Props {
 
 export default function ProtectedRoute({ children, allowedRoles }: Props) {
   const token = useAuthStore((s) => s.token);
-  const role = useAuthStore((s) => s.role);
+  const role = useAuthStore((s) => s.role as Role | null);
   const location = useLocation();
 
   // 1. 未登录 -> 跳转登录页
@@ -22,11 +21,7 @@ export default function ProtectedRoute({ children, allowedRoles }: Props) {
 
   // 2. 角色权限校验
   // 只有当 allowedRoles 存在 且 role 是合法角色时才校验
-  if (
-    allowedRoles &&
-    (role === 'admin' || role === 'user') &&
-    !allowedRoles.includes(role)
-  ) {
+  if (allowedRoles && role && !allowedRoles.includes(role as Role)) {
     return (
       <div
         style={{
@@ -39,7 +34,7 @@ export default function ProtectedRoute({ children, allowedRoles }: Props) {
         <Result
           status="403"
           title="403"
-          subTitle="抱歉，您没有权限访问此页面（仅管理员可见）。"
+          subTitle="抱歉，您没有权限访问此页面。"
           extra={
             <Button type="primary" onClick={() => window.history.back()}>
               返回上一页
