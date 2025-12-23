@@ -81,7 +81,11 @@ importers:
         specifier: ^7.2.4
         version: 7.3.0(@types/node@24.10.4)
 
-  packages/utils: {}
+  packages/utils:
+    devDependencies:
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
 
 packages:
 
