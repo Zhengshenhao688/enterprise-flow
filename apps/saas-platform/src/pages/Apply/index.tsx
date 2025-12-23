@@ -62,7 +62,6 @@ const ApplyPage: React.FC = () => {
       >
         {/* 页面说明 */}
         <div style={{ marginBottom: 24 }}>
-          <Title level={2}>员工发起申请</Title>
           <Paragraph type="secondary">
             请选择业务类型并填写详情，系统将自动匹配审批流。
           </Paragraph>

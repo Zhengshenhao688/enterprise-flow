@@ -1,167 +1,215 @@
-# 🚀 EnterpriseFlow - 企业低代码流程引擎
+# 🚀 EnterpriseFlow · 流程协作平台（React + Monorepo）
 
-![React](https://img.shields.io/badge/React-18.0-blue?style=flat-square&logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?style=flat-square&logo=typescript)
-![Zustand](https://img.shields.io/badge/State-Zustand-orange?style=flat-square)
-![Ant Design](https://img.shields.io/badge/UI-AntDesign-red?style=flat-square)
-![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
+![React](https://img.shields.io/badge/React-18-blue)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)
+![Vite](https://img.shields.io/badge/Vite-fast-yellow)
+![Zustand](https://img.shields.io/badge/Zustand-State-orange)
+![Ant Design](https://img.shields.io/badge/AntDesign-UI-red)
+![Monorepo](https://img.shields.io/badge/Monorepo-pnpm-green)
 
-> 一个基于 **React + TypeScript + Zustand** 构建的轻量级、高性能低代码流程引擎。  
-> 实现了从 **可视化流程设计**、**员工表单发起**、**RBAC 审批流转** 到 **数据可视化看板** 的完整业务闭环。
+EnterpriseFlow 是一个 **面向企业复杂业务流程的前端流程协作 SaaS 平台**，  
+支持通过 **可视化方式定义业务流程**，并完成 **多角色审批流转、流程追踪与数据展示**。
 
----
-
-## ✨ 项目亮点（Key Features）
-
-### 🎨 1. 可视化流程设计器（Visual Designer）
-
-采用 **“三明治式分层渲染架构”**  
-（SVG 连线层 → HTML 节点层 → 交互层），实现复杂交互下的高性能渲染。
-
-**核心能力：**
-- 拖拽建模：支持节点自由拖拽、画布平移（Space + Drag）
-- 智能连线：贝塞尔曲线连线 + 橡皮筋实时预览
-- 交互增强：ESC / 右键取消连线，Delete 删除节点
-- 逻辑约束：强制「左进右出（Left-in, Right-out）」
-- 图算法校验：流程发布前运行 BFS 校验连通性、死路、断路
-
-> 设计器只负责 **规则定义**，不直接产生业务数据。
+平台覆盖 **流程设计 → 员工申请 → 审批流转 → 数据看板** 的完整闭环，  
+可用于 **请假、报销、采购** 等企业流程的线上化与标准化管理。
 
 ---
 
-### 🔐 2. RBAC 权限与审批流转体系
+## 🧩 项目整体能力
 
-- 内置 Admin / Leader / HR / Finance 角色模型
-- 节点级权限控制（approverRole）
-- 权限隔离：
-  - 管理员：配置流程
-  - 员工：发起申请
-  - 审批人：仅可处理与自身角色匹配的任务
-- 规则在运行态真实控制审批行为
-
----
-
-### 📄 3. 员工申请 & 审批闭环
-
-- 员工发起页（Apply）
-  - 选择流程模板
-  - 填写业务表单
-  - 实时预览审批链路
-- 审批中心（Approval）
-  - 展示当前用户可处理的审批实例
-  - 支持同意 / 拒绝
-- 审批详情页（Detail）
-  - 展示表单数据
-  - 展示流程节点进度与日志
-  - 完整 Apply → Approval → Detail → Approve 闭环
+- 可视化流程设计器（低代码建模）
+- 条件网关（金额 / 天数等动态分支）
+- 多角色审批（HR / Manager / Finance / Admin）
+- 串行审批、会签 / 或签
+- 员工申请 & 实时流程预览
+- 审批中心 & 审批详情
+- 数据可视化看板（Demo）
+- Monorepo 工程化拆分
 
 ---
 
-### 📊 4. 数据可视化看板（Dashboard）
+## ✨ 核心功能
 
-- KPI：总申请数 / 审批中 / 通过率 / 平均耗时
+### 1️⃣ 流程设计器（Designer）
+
+- 基于 **画布 + 节点 + 连线** 的可视化流程建模
+- 支持节点类型：
+  - 开始节点
+  - 审批节点
+  - 条件网关（XOR）
+  - 结束节点
+- 条件分支支持：
+  - 金额（amount）
+  - 天数（days）
+- **流程定义态 / 运行态彻底分离**
+- 发布前执行流程合法性校验（断路 / 死路 / 默认路径）
+
+📸 示例：
+![Designer](apps/saas-platform/assets/designer.png)
+
+---
+
+### 2️⃣ 员工发起申请（Apply）
+
+- 选择已发布流程模板
+- 根据流程定义 **动态渲染表单字段**
+  - 若流程中存在金额 / 天数条件，才显示对应输入框
+- 实时预览审批路径（基于运行时条件计算）
+
+📸 示例：
+![Apply](apps/saas-platform/assets/apply.png)
+
+---
+
+### 3️⃣ 审批中心 & 审批详情（Approval）
+
+- 按角色展示「当前可审批任务」
+- 支持：
+  - 同意 / 拒绝
+  - 会签 / 或签
+- 审批详情页展示：
+  - 表单数据
+  - 当前节点
+  - 流程步骤与历史日志
+
+📸 示例：
+![Approval](apps/saas-platform/assets/approval.png)
+
+---
+
+### 4️⃣ 我的申请（My Applications）
+
+- 用户查看自己发起的所有流程实例
+- 实时展示：
+  - 当前节点
+  - 流程状态
+  - 提交时间
+
+📸 示例：
+![My Applications](apps/saas-platform/assets/my-applications.png)
+
+---
+
+### 5️⃣ 数据可视化看板（Dashboard · Demo）
+
+- 总申请数 / 审批中 / 通过率 / 平均耗时
 - 审批转化漏斗
-- 申请时间热力图（星期 × 小时）
-- 所有数据均来源于真实流程实例
+- 提交时间热力图
+
+📸 示例：
+![Dashboard](apps/saas-platform/assets/dashboard.png)
 
 ---
 
-## 🛠 技术栈（Tech Stack）
+## 🛠 技术栈
 
-- React 18 + TypeScript
-- Vite
-- Zustand（persist 本地持久化）
-- Ant Design 5
-- Apache ECharts
-- React Router v6
-- nanoid / dayjs
+- **前端框架**：React 18 + TypeScript
+- **构建工具**：Vite
+- **UI 组件库**：Ant Design 5
+- **状态管理**：Zustand
+- **路由管理**：React Router v6（懒加载）
+- **请求管理**：Axios（二次封装）
+- **工程管理**：pnpm + Monorepo
 
 ---
 
-## 📂 核心实现细节（Implementation Details）
+## 🚀 工程亮点
 
-### 1. 流程图数据结构
+### 🔐 路由懒加载 & 动态权限控制
 
-```ts
-type FlowNode = {
-  id: string;
-  type: 'start' | 'approval' | 'end';
-  name: string;
-  position: { x: number; y: number };
-  config?: {
-    approverRole?: 'leader' | 'hr' | 'finance';
-  };
-};
+- React.lazy + Suspense 实现路由级拆包
+- ProtectedRoute 基于角色控制访问权限
+- 支持路由模块预加载，提升首屏与切换体验
 
-type FlowEdge = {
-  id: string;
-  from: { nodeId: string; anchor: 'right' | 'bottom' };
-  to: { nodeId: string; anchor: 'left' | 'top' };
-};
+```tsx
+const Approval = React.lazy(() => import("../pages/Approval"));
+
+<Route
+  path="/approval"
+  element={
+    <ProtectedRoute allowedRoles={["hr", "manager", "admin"]}>
+      <Approval />
+    </ProtectedRoute>
+  }
+/>
 ```
 
-### 2. 流程发布校验（Graph Validation）
+---
 
-```ts
-function validateFlow(nodes, edges) {
-  const startNode = nodes.find(n => n.type === 'start');
-  const graph = buildAdjacencyList(edges);
-  const visited = bfs(graph, startNode.id);
+### ⚙️ Axios 二次封装（工程级）
 
-  const endNode = nodes.find(n => n.type === 'end');
-  if (!visited.has(endNode.id)) {
-    throw new Error('流程断路：无法到达结束节点');
-  }
+- 统一接口返回结构（code / message / data）
+- 请求 / 响应拦截器
+- Token 自动注入
+- 错误集中处理
+- 预留 **401 Token 刷新队列机制**
+
+**Token 刷新设计：**
+- isRefreshing 状态锁
+- 并发请求进入队列
+- 刷新成功后统一重放
+
+---
+
+## 🧱 Monorepo 架构设计（pnpm）
+
+```
+apps/
+  saas-platform/        # 主应用（业务层）
+packages/
+  ui-components/        # 通用 UI 组件
+  workflow-sdk/         # 流程引擎 SDK
+  utils/                # 工具函数（校验 / 守卫）
+```
+
+| 包名 | 职责 |
+|---|---|
+| ui-components | 页面壳、状态标签等 UI 抽象 |
+| workflow-sdk | 流程定义、条件计算、审批路径 |
+| utils | 校验、Guard、通用工具 |
+
+```json
+"dependencies": {
+  "@project/ui-components": "workspace:*",
+  "@project/utils": "workspace:*",
+  "@project/workflow-sdk": "workspace:*"
 }
 ```
 
-确保流程 **可执行、可终止、无死路**。
+---
+
+## 🧠 架构设计理念
+
+- **设计器 ≠ 业务**
+- **流程定义 ≠ 流程实例**
+- **UI ≠ 流程引擎**
+- 所有条件判断、审批推进均在运行态真实执行
 
 ---
 
-## 🚀 本地运行（Getting Started）
+## ▶️ 本地运行
 
 ```bash
-# 1. 克隆项目
-git clone https://github.com/your-username/enterprise-flow.git
-
-# 2. 安装依赖
-npm install
-# 或
-yarn install
-
-# 3. 启动开发环境
-npm run dev
+pnpm install
+pnpm dev
 ```
 
-浏览器访问：  
-👉 http://localhost:5173
+全局构建（Monorepo）：
+```bash
+pnpm -r build
+```
 
 ---
 
-## 📸 功能截图（Screenshots）
+## 📌 说明
 
-- **流程设计器（Designer）**  
-  ![Designer](./assets/designer.png)
+本项目为 **课程实践 + 工程能力展示项目**，  
+重点在于 **工程分层、模型设计与可扩展性**，而非页面数量。
 
-- **员工发起页（Apply）**  
-  ![Apply](./assets/apply.png)
-
-- **审批中心（Approval）**  
-  ![Approval](./assets/approval.png)
-
-- **数据看板（Dashboard）**  
-  ![Dashboard](./assets/dashboard.png) 
+后续可扩展：
+- 后端服务接入
+- BPMN 兼容
+- 流程回滚 / 撤回
+- 权限策略引擎
 
 ---
-
-## 🗺️ 未来规划（Roadmap）
-
-- 撤回（Undo）/ 重做（Redo）
-- 会签 / 或签 / 抄送节点
-- 条件分支（Condition Flow）
-- 接入后端 API（替换 LocalStorage）
-- 支持 BPMN 2.0 导入 / 导出
-
----
-
