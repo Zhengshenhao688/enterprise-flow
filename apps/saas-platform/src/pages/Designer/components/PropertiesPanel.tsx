@@ -80,20 +80,14 @@ const PropertiesPanel: React.FC = () => {
                   {advanced ? (
                     <Input
                       style={{ width: "100%" }}
-                      placeholder="如：from.amount"
-                      value={edge.condition?.left ?? ""}
-                      onChange={(e) =>
-                        setEdgeCondition(edge.id, {
-                          op: edge.condition?.op ?? "eq",
-                          left: e.target.value,
-                          right: edge.condition?.right ?? "",
-                        })
-                      }
+                      disabled
+                      placeholder="高级模式已禁用字段手输"
+                      value={edge.condition?.left ?? ''}
                     />
                   ) : (
                     <Select
                       style={{ width: "100%" }}
-                      placeholder="选择字段（如：金额）"
+                      placeholder="选择字段（如：金额 / 天数）"
                       options={FIELD_CATALOG.map((f) => ({
                         label: f.label,
                         value: f.path,
@@ -103,7 +97,7 @@ const PropertiesPanel: React.FC = () => {
                         setEdgeCondition(edge.id, {
                           op: edge.condition?.op ?? "eq",
                           left: v,
-                          right: edge.condition?.right ?? "",
+                          right: edge.condition?.right ?? 0,
                         })
                       }
                     />
@@ -124,8 +118,8 @@ const PropertiesPanel: React.FC = () => {
                     onChange={(op) =>
                       setEdgeCondition(edge.id, {
                         op,
-                        left: edge.condition?.left ?? "",
-                        right: edge.condition?.right ?? "",
+                        left: edge.condition?.left ?? "form.amount",
+                        right: edge.condition?.right ?? 0,
                       })
                     }
                   />
@@ -136,7 +130,7 @@ const PropertiesPanel: React.FC = () => {
                     const fieldMeta = FIELD_CATALOG.find(
                       (f) => f.path === edge.condition?.left
                     );
-                    const fieldType = fieldMeta?.type ?? "string";
+                    const fieldType = fieldMeta?.type ?? "number";
                     if (fieldType === "number") {
                       return (
                         <InputNumber
@@ -153,9 +147,11 @@ const PropertiesPanel: React.FC = () => {
                               setEdgeCondition(edge.id, null);
                               return;
                             }
+                            if (!edge.condition) return;
+
                             setEdgeCondition(edge.id, {
-                              op: edge.condition?.op ?? "eq",
-                              left: edge.condition?.left ?? "",
+                              op: edge.condition.op,
+                              left: edge.condition.left,
                               right: v,
                             });
                           }}
@@ -166,13 +162,15 @@ const PropertiesPanel: React.FC = () => {
                       <Input
                         placeholder="右值"
                         value={String(edge.condition?.right ?? "")}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          if (!edge.condition) return;
+
                           setEdgeCondition(edge.id, {
-                            op: edge.condition?.op ?? "eq",
-                            left: edge.condition?.left ?? "",
+                            op: edge.condition.op,
+                            left: edge.condition.left,
                             right: e.target.value,
-                          })
-                        }
+                          });
+                        }}
                       />
                     );
                   })()}

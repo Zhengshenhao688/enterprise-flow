@@ -44,7 +44,7 @@ const FlowPreview: React.FC<FlowPreviewProps> = ({
 
           {previewSteps === "NEED_CONDITION_INPUT" ? (
             <Empty
-              description="请输入金额以预览审批流程"
+              description="请先填写条件字段（如：金额 / 天数）以预览审批流程"
               image={Empty.PRESENTED_IMAGE_SIMPLE}
             />
           ) : Array.isArray(previewSteps) ? (

@@ -1,7 +1,10 @@
+/** 条件字段（用于条件表达式 left） */
+export type ConditionField = 'amount' | 'days';
+
 /** 条件表达式（用于条件网关出边） */
 export type ConditionExpr = {
   op: 'eq' | 'gt' | 'gte' | 'lt' | 'lte';
-  left: string; // 例如 form.amount
+  left: ConditionField; // amount | days
   right: string | number;
 };
 

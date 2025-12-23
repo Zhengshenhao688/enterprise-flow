@@ -16,6 +16,7 @@ export interface ApplyFormData extends Record<string, unknown> {
   title: string;
   reason: string;
   amount?: number;
+  days?: number;
 }
 
 /* =========================
@@ -30,6 +31,7 @@ export function useApply() {
   const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
 
   const watchedAmount = Form.useWatch("amount", form);
+  const watchedDays = Form.useWatch("days", form);
 
   const publishedFlows = useFlowStore((s) => s.publishedFlows);
   const startProcess = useProcessInstanceStore((s) => s.startProcess);
@@ -116,14 +118,21 @@ export function useApply() {
     //const hasGateway = definition.nodes.some((n) => n.type === "gateway");
     //const hasCondition = definition.edges.some((e) => !!e.condition);
 
-    if (needAmountInput && (watchedAmount == null || Number.isNaN(Number(watchedAmount)))) {
+    if (
+      needAmountInput &&
+      (watchedAmount == null || Number.isNaN(Number(watchedAmount))) &&
+      (watchedDays == null || Number.isNaN(Number(watchedDays)))
+    ) {
       return "NEED_CONDITION_INPUT" as const;
     }
 
     const ctx = {
       form: {
         ...form.getFieldsValue(),
-        amount: Number(watchedAmount ?? 0),
+        amount:
+          watchedAmount != null ? Number(watchedAmount) : undefined,
+        days:
+          watchedDays != null ? Number(watchedDays) : undefined,
       },
     };
 
@@ -137,7 +146,7 @@ export function useApply() {
       })),
       { title: "流程结束", status: "wait" as const },
     ];
-  }, [selectedFlow, watchedAmount, form, needAmountInput]);
+  }, [selectedFlow, watchedAmount, watchedDays, form, needAmountInput]);
 
   /* =========================
      Export

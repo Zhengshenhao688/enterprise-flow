@@ -21,6 +21,7 @@ export interface ApplyFormData extends Record<string, unknown> {
   title: string;
   reason: string;
   amount?: number;
+  days?: number;
 }
 
 interface FlowNodeLike {
@@ -28,7 +29,9 @@ interface FlowNodeLike {
 }
 
 interface FlowEdgeLike {
-  condition?: unknown;
+  condition?: {
+    left?: string;
+  };
 }
 
 interface PublishedFlow {
@@ -65,7 +68,6 @@ const ApplyForm: React.FC<ApplyFormProps> = ({
   onSelectFlow,
   form,
   onSubmitSuccess,
-  needAmountInput,
 }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -77,6 +79,32 @@ const ApplyForm: React.FC<ApplyFormProps> = ({
     () => publishedFlows.find((f) => f.id === selectedFlowId),
     [publishedFlows, selectedFlowId]
   );
+
+  const usedConditionFields = useMemo(() => {
+    if (!selectedFlow) return new Set<string>();
+
+    // ✅ 兼容 publishedFlows 的两种结构
+    const edges =
+      selectedFlow.definitionSnapshot?.edges ??
+      selectedFlow.edges ??
+      [];
+
+    const fields = new Set<string>();
+
+    edges.forEach((edge: FlowEdgeLike) => {
+      const left = edge.condition?.left;
+
+      // Designer / Engine 统一使用 form.xxx
+      if (typeof left === "string" && left.startsWith("form.")) {
+        const key = left.slice("form.".length);
+        if (key === "amount" || key === "days") {
+          fields.add(key);
+        }
+      }
+    });
+
+    return fields;
+  }, [selectedFlow]);
 
   const onFinish = async (values: ApplyFormData) => {
     if (!selectedFlow) {
@@ -156,13 +184,23 @@ const ApplyForm: React.FC<ApplyFormProps> = ({
           </Select>
         </Form.Item>
 
-        {needAmountInput && (
+        {usedConditionFields.has("amount") && (
           <Form.Item
             label="金额（用于条件判断）"
             name="amount"
             rules={[{ required: true, message: "请输入金额" }]}
           >
             <Input type="number" size="large" />
+          </Form.Item>
+        )}
+
+        {usedConditionFields.has("days") && (
+          <Form.Item
+            label="天数（用于条件判断）"
+            name="days"
+            rules={[{ required: true, message: "请输入天数" }]}
+          >
+            <Input type="number" size="large" min={1} />
           </Form.Item>
         )}
 

@@ -1,48 +1,56 @@
-import type { ConditionExpr, FormContext } from "../types";
+import type { ConditionExpr, FormContext } from "../types/engine";
 
-function getValue(path: string, ctx: FormContext): unknown {
-  const form = ctx.form;
+/**
+ * 从表单上下文中读取条件左值
+ * 新标准：amount | days
+ * 兼容旧数据：form.amount
+ */
+function getValue(left: string, ctx: FormContext): unknown {
+  const form = ctx.form as Record<string, unknown>;
 
-  // 支持 "amount"
-  if (path in form) {
-    return (form as Record<string, unknown>)[path];
+  // ✅ 新模型优先：amount / days
+  if (left in form) {
+    return form[left];
   }
 
-  // 支持 "form.amount"
-  if (path.startsWith("form.")) {
-    const key = path.slice("form.".length);
-    return (form as Record<string, unknown>)[key];
+  // 🟡 兼容旧模型：form.amount
+  if (left.startsWith("form.")) {
+    const key = left.slice("form.".length);
+    return form[key];
   }
 
   return undefined;
 }
 
+/**
+ * 条件表达式求值（用于条件网关）
+ */
 export function evaluateCondition(
   expr: ConditionExpr,
   ctx: FormContext
 ): boolean {
-  const left = getValue(expr.left, ctx);
-  const right = expr.right;
+  const leftValue = getValue(expr.left, ctx);
+  const rightValue = expr.right;
 
-  // 防御：取不到值直接 false
-  if (left === undefined) {
+  // 防御：左值不存在，条件直接不成立
+  if (leftValue === undefined) {
     console.warn("[conditionEvaluator] left value not found", expr, ctx);
     return false;
   }
 
   switch (expr.op) {
     case "gt":
-      return Number(left) > Number(right);
+      return Number(leftValue) > Number(rightValue);
     case "gte":
-      return Number(left) >= Number(right);
+      return Number(leftValue) >= Number(rightValue);
     case "lt":
-      return Number(left) < Number(right);
+      return Number(leftValue) < Number(rightValue);
     case "lte":
-      return Number(left) <= Number(right);
+      return Number(leftValue) <= Number(rightValue);
     case "eq":
-      return left === right;
+      return leftValue === rightValue;
     case "neq":
-      return left !== right;
+      return leftValue !== rightValue;
     default:
       console.warn("[conditionEvaluator] unknown op", expr.op);
       return false;

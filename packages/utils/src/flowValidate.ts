@@ -5,6 +5,16 @@ export type ValidateResult = {
   error?: string;
 };
 
+function isValidConditionLeft(left: string): boolean {
+  // 必须以 form. 开头
+  if (!left.startsWith("form.")) return false;
+
+  const field = left.slice("form.".length);
+
+  // 当前允许的条件字段
+  return field === "amount" || field === "days";
+}
+
 export function validateFlow(def: ProcessDefinition): ValidateResult {
   const { nodes, edges } = def;
 
@@ -74,7 +84,7 @@ export function validateFlow(def: ProcessDefinition): ValidateResult {
           };
         }
 
-        if (!edge.condition.left.startsWith("form.")) {
+        if (!isValidConditionLeft(edge.condition.left)) {
           return {
             success: false,
             error: `条件左值必须以 form. 开头（网关：${gateway.name}）`,

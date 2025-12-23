@@ -15,13 +15,21 @@ export function assertTaskAtCurrentNode(params: { taskNodeId: string; currentNod
 }
 
 /**
- * 从 context.form 中安全读取值
- * 支持 left = "form.amount" 这种路径
+ * 通用取值函数，支持路径如 form.amount、form.days
  */
-function getFormValue(left: string, form: Record<string, FormValue>): FormValue {
-  if (!left.startsWith('form.')) return null;
-  const key = left.slice('form.'.length);
-  return form[key] ?? null;
+function getValue(path: string, form: Record<string, FormValue>): FormValue | null {
+  const parts = path.split('.');
+  let value: unknown = { form };
+
+  for (const part of parts) {
+    if (typeof value === 'object' && value !== null && part in value) {
+      value = (value as Record<string, unknown>)[part];
+    } else {
+      return null;
+    }
+  }
+
+  return value as FormValue;
 }
 
 /**
@@ -31,72 +39,28 @@ export function evaluateCondition(
   condition: ConditionExpr | undefined,
   context: { form: Record<string, FormValue> }
 ): boolean {
-  if (!condition) {
-    console.log("[evaluateCondition] skip: no condition");
-    return false;
-  }
+  if (!condition) return true;
 
   const { left, op, right } = condition;
-  const leftValue = getFormValue(left, context.form);
+  const leftValue = getValue(left, context.form);
 
-  console.log("[evaluateCondition] input", {
-    condition,
-    leftValue,
-    leftType: typeof leftValue,
-    rightValue: right,
-    rightType: typeof right,
-    contextForm: context.form,
-  });
-
-  if (leftValue == null) {
-    console.log("[evaluateCondition] leftValue is null/undefined → false");
-    return false;
-  }
+  if (leftValue == null) return false;
 
   const leftNum = Number(leftValue);
   const rightNum = Number(right);
 
-  if (Number.isNaN(leftNum) || Number.isNaN(rightNum)) {
-    console.log("[evaluateCondition] NaN detected → false", {
-      leftValue,
-      rightValue: right,
-    });
-    return false;
-  }
-
-  let result = false;
-
   switch (op) {
-    case "eq":
-      result = leftValue === right;
-      break;
-
-    case "gt":
-      result = leftNum > rightNum;
-      break;
-
-    case "gte":
-      result = leftNum >= rightNum;
-      break;
-
-    case "lt":
-      result = leftNum < rightNum;
-      break;
-
-    case "lte":
-      result = leftNum <= rightNum;
-      break;
-
+    case 'eq':
+      return leftValue === right;
+    case 'gt':
+      return leftNum > rightNum;
+    case 'gte':
+      return leftNum >= rightNum;
+    case 'lt':
+      return leftNum < rightNum;
+    case 'lte':
+      return leftNum <= rightNum;
     default:
-      result = false;
+      return false;
   }
-
-  console.log("[evaluateCondition] result", {
-    op,
-    leftNum,
-    rightNum,
-    result,
-  });
-
-  return result;
 }

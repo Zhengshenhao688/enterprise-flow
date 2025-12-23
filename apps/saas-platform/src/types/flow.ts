@@ -4,10 +4,15 @@ export type ApprovalMode = 'MATCH_ALL' | 'MATCH_ANY'; //
 /** 流程发布状态 */
 export type ProcessStatus = "draft" | "published";
 
+// ✅ 条件左值：只允许 form.xxx
+export type ConditionField =
+  | 'form.amount'
+  | 'form.days';
+
 /** 条件表达式（用于条件网关出边） */
 export type ConditionExpr = {
   op: 'eq' | 'gt' | 'gte' | 'lt' | 'lte';
-  left: string; // 例如 form.amount
+  left: ConditionField; // amount | days
   right: string | number;
 };
 
