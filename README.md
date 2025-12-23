@@ -1,4 +1,4 @@
-# 🚀 EnterpriseFlow · 流程协作平台（React + Monorepo）
+<file name=0 path=/Users/zhengshenhao/Developer/Projects/enterprise-flow/README.md># 🚀 EnterpriseFlow · 流程协作平台（React + Monorepo）
 
 ![React](https://img.shields.io/badge/React-18-blue)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)
@@ -71,9 +71,16 @@ EnterpriseFlow 是一个 **面向企业复杂业务流程的前端流程协作 S
   - 表单数据
   - 当前节点
   - 流程步骤与历史日志
+- 审批详情页（Approval Detail）支持：
+  - 查看申请表单完整数据
+  - 当前审批节点与可操作按钮（同意 / 拒绝）
+  - 完整审批时间线（提交 / 审批 / 驳回）
 
 📸 示例：
 ![Approval](apps/saas-platform/assets/approval.png)
+
+📸 示例（审批详情）：
+![Approval Detail](apps/saas-platform/assets/approval-detail.png)
 
 ---
 
@@ -213,3 +220,4 @@ pnpm -r build
 - 权限策略引擎
 
 ---
+
