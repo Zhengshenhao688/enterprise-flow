@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Card, Table, Tag, Typography, Empty, Space } from "antd";
+import { Table, Tag, Typography, Empty, Space } from "antd";
 import { useNavigate } from "react-router-dom";
 
 import {useAuthStore} from "../../store/useAuthStore";
@@ -7,14 +7,9 @@ import { useProcessInstanceStore } from "../../store/processInstanceStore";
 import type { ProcessInstance } from "../../types/process";
 import { buildApprovalPath, getDefinitionSnapshot } from "@project/workflow-sdk";
 import { useTaskStore } from "../../store/taskStore";
+import { StatusTag, PageContainer } from "@project/ui-components";
 
 const { Text } = Typography;
-
-const STATUS_MAP: Record<string, { text: string; color: string }> = {
-  running: { text: "进行中", color: "processing" },
-  approved: { text: "已通过", color: "success" },
-  rejected: { text: "已拒绝", color: "error" },
-};
 
 type InstanceRecord = ProcessInstance;
 
@@ -107,8 +102,11 @@ const MyApplications: React.FC = () => {
       dataIndex: "status",
       key: "status",
       render: (status: string) => {
-        const cfg = STATUS_MAP[status];
-        return <Tag color={cfg?.color}>{cfg?.text || status}</Tag>;
+        if (status !== "running" && status !== "approved" && status !== "rejected") {
+          return <Tag>{status}</Tag>;
+        }
+
+        return <StatusTag status={status} />;
       },
     },
     {
@@ -136,7 +134,7 @@ const MyApplications: React.FC = () => {
   ];
 
   return (
-    <Card title="我发起的申请" style={{ height: "100%" }}>
+    <PageContainer title="我发起的申请">
       {myApplications.length === 0 ? (
         <Empty description="暂无我发起的申请" />
       ) : (
@@ -147,7 +145,7 @@ const MyApplications: React.FC = () => {
           pagination={{ pageSize: 5 }}
         />
       )}
-    </Card>
+    </PageContainer>
   );
 };
 

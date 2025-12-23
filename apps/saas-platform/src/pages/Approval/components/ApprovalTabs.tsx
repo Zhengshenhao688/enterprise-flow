@@ -18,6 +18,7 @@ import {
 } from "@ant-design/icons";
 
 import type { ProcessInstance } from "../../../types/process";
+import { StatusTag } from "@project/ui-components";
 
 const { Text } = Typography;
 
@@ -97,13 +98,11 @@ const ApprovalTabs: React.FC<ApprovalTabsProps> = ({
       dataIndex: "status",
       key: "status",
       render: (status: string) => {
-        const map: Record<string, { color: string; text: string }> = {
-          running: { color: "processing", text: "审批中" },
-          approved: { color: "success", text: "已通过" },
-          rejected: { color: "error", text: "已拒绝" },
-        };
-        const cur = map[status] || { color: "default", text: status };
-        return <Tag color={cur.color}>{cur.text}</Tag>;
+        if (status !== "running" && status !== "approved" && status !== "rejected") {
+          return <Tag>{status}</Tag>;
+        }
+
+        return <StatusTag status={status} />;
       },
     },
     {

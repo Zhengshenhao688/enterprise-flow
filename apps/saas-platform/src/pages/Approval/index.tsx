@@ -1,5 +1,5 @@
 import React from "react";
-import { Card } from "antd";
+import { PageContainer } from "@project/ui-components";
 
 import ApprovalHeader from "./components/ApprovalHeader";
 import ApprovalTabs from "./components/ApprovalTabs";
@@ -10,18 +10,16 @@ const Approval: React.FC = () => {
   const approval = useApproval();
 
   return (
-    <div style={{ padding: 24 }}>
-      <Card variant="outlined">
-        <ApprovalHeader userRole={approval.userRole} />
+    <PageContainer>
+      <ApprovalHeader userRole={approval.userRole} />
 
-        <ApprovalTabs
-          pendingList={approval.pendingList}
-          historyList={approval.historyList}
-          onViewDetail={approval.viewDetail}
-          onQuickApprove={approval.quickApprove}
-          onOpenDelegate={approval.openDelegate}
-        />
-      </Card>
+      <ApprovalTabs
+        pendingList={approval.pendingList}
+        historyList={approval.historyList}
+        onViewDetail={approval.viewDetail}
+        onQuickApprove={approval.quickApprove}
+        onOpenDelegate={approval.openDelegate}
+      />
 
       <DelegateModal
         open={approval.delegateVisible}
@@ -31,7 +29,7 @@ const Approval: React.FC = () => {
         onCancel={() => approval.setDelegateVisible(false)}
         onConfirm={approval.confirmDelegate}
       />
-    </div>
+    </PageContainer>
   );
 };
 
