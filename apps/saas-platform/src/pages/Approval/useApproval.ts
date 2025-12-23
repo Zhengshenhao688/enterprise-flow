@@ -9,6 +9,11 @@ import { useProcessInstanceStore } from "../../store/processInstanceStore";
 import { useTaskStore } from "../../store/taskStore";
 import { ApprovalGuardError } from "@project/utils";
 
+import {
+  buildApprovalPath,
+  getDefinitionSnapshot,
+} from "@project/workflow-sdk";
+
 export function useApproval() {
   const navigate = useNavigate();
 
@@ -40,7 +45,33 @@ export function useApproval() {
     );
 
     return uniqueInstanceIds
-      .map((id) => instancesMap[id])
+      .map((id) => {
+        const instance = instancesMap[id];
+        if (!instance || !instance.definitionSnapshot) return instance;
+
+        const def = getDefinitionSnapshot(instance);
+        if (!def) return instance;
+
+        const ctx = { form: instance.formData ?? {} };
+        const path = buildApprovalPath(def, ctx);
+        const current = path.find(
+          (p) => p.id === instance.currentNodeId
+        );
+
+        const pendingApproverRoles = tasks
+          .filter(
+            (t) =>
+              t.instanceId === instance.instanceId &&
+              t.status === "pending"
+          )
+          .map((t) => t.assigneeRole);
+
+        return {
+          ...instance,
+          currentApprovalLabel: current?.label ?? "-",
+          pendingApproverRoles,
+        };
+      })
       .filter(
         (i): i is ProcessInstance => i !== undefined
       )

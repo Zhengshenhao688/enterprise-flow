@@ -69,27 +69,25 @@ const ApprovalTabs: React.FC<ApprovalTabsProps> = ({
       title: "当前节点",
       dataIndex: "currentNodeId",
       key: "currentNodeId",
-      render: (text, record) => {
-        if (record.status !== "running")
+      render: (_, record) => {
+        if (record.status !== "running") {
           return <Text type="secondary">-</Text>;
+        }
 
-        if (!record.definitionSnapshot) {
+        if (!record.currentApprovalLabel) {
           return <Text type="secondary">流程初始化中</Text>;
         }
 
-        const node = record.definitionSnapshot.nodes.find(
-          (n) => n.id === text
-        );
-        const role = node?.config?.approverRole;
-
         return (
-          <Space direction="vertical" size={0}>
-            <Tag color="blue">{node?.name || text}</Tag>
-            {role && (
-              <Text type="secondary" style={{ fontSize: 10 }}>
-                (需 {role} 审批)
-              </Text>
-            )}
+          <Space direction="vertical" size={2}>
+            <Tag color="blue">{record.currentApprovalLabel}</Tag>
+
+            {Array.isArray(record.pendingApproverRoles) &&
+              record.pendingApproverRoles.length > 0 && (
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  待审批：{record.pendingApproverRoles.join("、")}
+                </Text>
+              )}
           </Space>
         );
       },

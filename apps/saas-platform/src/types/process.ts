@@ -76,6 +76,10 @@ export interface ProcessDefinition {
  * 每一次真实提交都会生成一个实例
  */
 export interface ProcessInstance {
+  currentApprovalLabel?: string;
+
+  /** 会签/串行：当前仍需审批的角色列表 */
+  pendingApproverRoles?: string[];
   /** 实例 ID */
   instanceId: string;
 
