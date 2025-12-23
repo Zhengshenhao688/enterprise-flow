@@ -1,5 +1,3 @@
-// src/engine/types.ts
-
 export type NodeType = "start" | "approval" | "gateway" | "end";
 
 export interface EngineFlowNode {

@@ -5,8 +5,8 @@ import { useNavigate } from "react-router-dom";
 import { useFlowStore } from "../../store/flowStore";
 import { useProcessInstanceStore } from "../../store/processInstanceStore";
 import { useAuthStore } from "../../store/useAuthStore";
-import { buildApprovalPath } from "../../engine/approvalPath";
-import { getDefinitionSnapshot } from "../../engine/getDefinitionSnapshot";
+import { buildApprovalPath } from "@project/workflow-sdk";
+import { getDefinitionSnapshot } from "@project/workflow-sdk";;
 
 /* =========================
    Types（最小可用）

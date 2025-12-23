@@ -1,5 +1,4 @@
-// src/engine/getDefinitionSnapshot.ts
-import type { EngineFlowDefinition } from "./types";
+import type { EngineFlowDefinition } from "../types";
 
 /**
  * 从流程对象中安全地提取 EngineFlowDefinition

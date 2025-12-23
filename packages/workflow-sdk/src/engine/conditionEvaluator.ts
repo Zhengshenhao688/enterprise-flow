@@ -1,5 +1,4 @@
-// src/engine/conditionEvaluator.ts
-import type { ConditionExpr, FormContext } from "./types";
+import type { ConditionExpr, FormContext } from "../types";
 
 function getValue(path: string, ctx: FormContext): unknown {
   const form = ctx.form;

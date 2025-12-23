@@ -1,5 +1,4 @@
-// src/engine/gatewayResolver.ts
-import type { EngineFlowDefinition, FormContext } from "./types";
+import type { EngineFlowDefinition, FormContext } from "../types";
 import { evaluateCondition } from "./conditionEvaluator";
 
 export function resolveNextNodeId(

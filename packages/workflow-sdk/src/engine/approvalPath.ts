@@ -1,10 +1,9 @@
-// src/engine/approvalPath.ts
 import type {
   EngineFlowDefinition,
   FormContext,
   ApprovalPathNode,
   EngineFlowNode,
-} from "./types";
+} from "../types";
 import { resolveNextNodeId } from "./gatewayResolver";
 
 type ApprovalConfig = {
